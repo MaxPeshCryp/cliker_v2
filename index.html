@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кликер</title>
+    <link rel="stylesheet" href="./style.css?v=8">
+    <script src="./script.js?v=8" defer> </script>
+</head>
+
+<body>
+    <h1>Кликер</h1>
+    <form id="form-register">
+        <h2>Регистрация</h2>
+        <label for="nik-register">Придумайте ник нейм </label>
+        <input type="text" placeholder="nik" id="nik-register" required>
+
+        <label for="email-register">Введите вашу почту</label>
+        <input type="email" placeholder="user@mail.com" id="email-register" required>
+
+        <label for="password-register">Придумайте пароль</label>
+        <input type="password" id="password-register" required>
+
+        <button type="submit">Зарегистрироваться</button>
+        <p>
+            Вы уже Зарегистрированы? Нажмите <span id="changeLogin" class="change-link">Войти</span>
+        </p>
+
+
+    </form>
+
+    <form id="form-login">
+
+        <h2>Войти</h2>
+        <label for="email-login">Введите вашу почту</label>
+        <input type="email" placeholder="user@mail.com" id="email-login" required>
+
+        <label for="password-login">Введите пароль</label>
+        <input type="password" placeholder="" id="password-login" required>
+
+        <button type="submit">Войти </button>
+        <p>
+            Если вы не Зарегистрированы нажмите <span id="change-register" class="change-link"> Зарегистрироваться
+            </span>
+        </p>
+    </form>
+
+    <div id="game">
+        <div id="gameData">
+            <p>
+                имя: <span id="name"></span>
+            </p>
+            <p>
+                сила клика: <span id="clickForce"></span>
+            </p>
+
+        </div>
+        <div id="stickyControls">
+            <p id="countBox">
+                <span id="userCount"></span>
+            </p>
+            <button id="clickMe"> click me </button>
+        </div>
+        <button id="clickForceUpgrade"> </button>
+        <section id="robots">
+            <h2>Роботы</h2>
+            <p id="robotsIncome"></p>
+            <div id="robotsList"></div>
+        </section>
+        <section id="endgame">
+            <h2>Эндгейм</h2>
+            <div id="prestigePanel" class="endgame-panel"></div>
+            <div class="endgame-tabs">
+                <button type="button" data-endgame-tab="research">Исследования</button>
+                <button type="button" data-endgame-tab="boosts">Бусты</button>
+                <button type="button" data-endgame-tab="cosmetics">Косметика</button>
+                <button type="button" data-endgame-tab="collections">Коллекция</button>
+                <button type="button" data-endgame-tab="investments">Инвестиции</button>
+                <button type="button" data-endgame-tab="achievements">Достижения</button>
+            </div>
+            <div id="endgameContent"></div>
+        </section>
+    </div>
+
+</body>
+
+</html>
