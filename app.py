@@ -12,7 +12,9 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = BASE_DIR / "clicker.db"
+# Keep persistent data outside the Git working tree in production.  Locally the
+# application remains backwards-compatible and uses clicker.db beside app.py.
+DATABASE_PATH = Path(os.environ.get("CLICKER_DATABASE_PATH", BASE_DIR / "clicker.db"))
 BASE_ROBOT_MAX_LEVEL = 5
 ROBOTS = {
     "robot1": {
@@ -102,6 +104,7 @@ app.secret_key = os.environ.get("CLICKER_SECRET_KEY") or secrets.token_urlsafe(4
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("CLICKER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
 )
 
 
