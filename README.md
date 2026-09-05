@@ -23,7 +23,7 @@ C:\\Users\\$env:USERNAME\\clicker-venv\\Scripts\\python.exe -m unittest discover
 
 ## Выгрузка на VPS
 
-Production-конфигурация рассчитана на Ubuntu и домен `max_click_pesh.iteacher-alex.org`.
+Production-конфигурация рассчитана на Ubuntu и домен `max-click-pesh.iteacher-alex.org`.
 На сервере создаётся один изолированный каталог `/var/www/clicker`:
 
 - `app` — Git-клон приложения;

@@ -20,14 +20,14 @@ sudo -u "$APP_USER" "$APP_ROOT/venv/bin/python" -m pip install --upgrade -r "$AP
 
 install -m 0644 "$APP_ROOT/app/deploy/clicker.service" /etc/systemd/system/clicker.service
 install -d -m 0755 /var/www/certbot
-if [ ! -f /etc/letsencrypt/live/max_click_pesh.iteacher-alex.org/fullchain.pem ]; then
+if [ ! -f /etc/letsencrypt/live/max-click-pesh.iteacher-alex.org/fullchain.pem ]; then
     install -m 0644 "$APP_ROOT/app/deploy/nginx-clicker-http.conf" /etc/nginx/sites-available/clicker
     ln -sfn /etc/nginx/sites-available/clicker /etc/nginx/sites-enabled/clicker
     rm -f /etc/nginx/sites-enabled/default
     nginx -t
     systemctl reload nginx
     test -n "${CLICKER_CERTBOT_EMAIL:-}" || { echo "Set CLICKER_CERTBOT_EMAIL in $APP_ROOT/.env" >&2; exit 1; }
-    certbot certonly --webroot -w /var/www/certbot -d max_click_pesh.iteacher-alex.org --non-interactive --agree-tos --email "$CLICKER_CERTBOT_EMAIL"
+    certbot certonly --webroot -w /var/www/certbot -d max-click-pesh.iteacher-alex.org --non-interactive --agree-tos --email "$CLICKER_CERTBOT_EMAIL"
 fi
 install -m 0644 "$APP_ROOT/app/deploy/nginx-clicker.conf" /etc/nginx/sites-available/clicker
 ln -sfn /etc/nginx/sites-available/clicker /etc/nginx/sites-enabled/clicker
