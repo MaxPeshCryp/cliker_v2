@@ -60,6 +60,23 @@ class ClickerApiTests(unittest.TestCase):
         self.assertEqual(state["prestigePoints"], 1)
         self.assertEqual(state["baseClickForce"], 1)
 
+    def test_leaderboard_has_podium_and_players_around_current_user(self):
+        self.register_and_login()
+        with clicker.db_connection() as db:
+            for index, score in enumerate((900, 800, 700, 600, 500, 400, 300), start=1):
+                db.execute(
+                    "INSERT INTO users (nickname, email, password_hash, last_income_at, total_earned) VALUES (?, ?, ?, ?, ?)",
+                    (f"Player {index}", f"player{index}@example.com", "hash", 0, score),
+                )
+
+        response = self.client.get("/api/state")
+        self.assertEqual(response.status_code, 200)
+        leaderboard = response.get_json()["leaderboard"]
+        self.assertEqual([player["nickname"] for player in leaderboard["top"]], ["Player 1", "Player 2", "Player 3"])
+        self.assertEqual(leaderboard["currentRank"], 8)
+        self.assertEqual([player["nickname"] for player in leaderboard["around"]], ["Player 5", "Player 6", "Player 7", "Tester"])
+        self.assertTrue(leaderboard["around"][-1]["isCurrentUser"])
+
 
 if __name__ == "__main__":
     unittest.main()

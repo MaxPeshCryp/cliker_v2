@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Кликер</title>
-    <link rel="stylesheet" href="./style.css?v=8">
-    <script src="./script.js?v=8" defer> </script>
+    <link rel="stylesheet" href="./style.css?v=9">
+    <script src="./script.js?v=9" defer> </script>
 </head>
 
 <body>
@@ -46,8 +46,9 @@
         </p>
     </form>
 
-    <div id="game">
-        <div id="gameData">
+    <div id="gameLayout">
+        <div id="game">
+            <div id="gameData">
             <p>
                 имя: <span id="name"></span>
             </p>
@@ -68,7 +69,7 @@
             <p id="robotsIncome"></p>
             <div id="robotsList"></div>
         </section>
-        <section id="endgame">
+            <section id="endgame">
             <h2>Эндгейм</h2>
             <div id="prestigePanel" class="endgame-panel"></div>
             <div class="endgame-tabs">
@@ -80,7 +81,19 @@
                 <button type="button" data-endgame-tab="achievements">Достижения</button>
             </div>
             <div id="endgameContent"></div>
-        </section>
+            </section>
+        </div>
+        <aside id="leaderboard" aria-labelledby="leaderboardTitle">
+            <div class="leaderboard-heading">
+                <span aria-hidden="true">🏆</span>
+                <h2 id="leaderboardTitle">Рейтинг игроков</h2>
+            </div>
+            <p class="leaderboard-caption">По общему заработку</p>
+            <div id="leaderboardTop" class="leaderboard-list"></div>
+            <div class="leaderboard-divider" aria-hidden="true"></div>
+            <p id="leaderboardPosition" class="leaderboard-position"></p>
+            <div id="leaderboardAround" class="leaderboard-list"></div>
+        </aside>
     </div>
 
 </body>

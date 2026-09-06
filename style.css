@@ -46,7 +46,8 @@ h1 {
 }
 
 form,
-#game {
+#game,
+#leaderboard {
     width: min(100%, 380px);
     padding: 30px;
     border: 1px solid rgba(255, 217, 102, 0.34);
@@ -174,11 +175,104 @@ span.change-link:hover {
     transform: translateY(-1px);
 }
 
+#gameLayout {
+    width: min(100%, 900px);
+    display: none;
+    grid-template-columns: minmax(0, 560px) minmax(260px, 300px);
+    align-items: start;
+    gap: 20px;
+}
+
 #game {
     width: min(100%, 560px);
-    display: none;
     text-align: center;
     overflow: visible;
+}
+
+#leaderboard {
+    width: 100%;
+    padding: 22px;
+    position: sticky;
+    top: 18px;
+}
+
+.leaderboard-heading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+}
+
+.leaderboard-heading h2 {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.leaderboard-caption {
+    margin: 8px 0 14px;
+    color: var(--muted);
+    font-size: 0.68rem;
+    text-align: center;
+}
+
+.leaderboard-list {
+    display: grid;
+    gap: 7px;
+}
+
+.leaderboard-row {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(255, 217, 102, 0.16);
+    border-radius: 10px;
+    background: rgba(10, 15, 21, 0.46);
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    font-size: 0.7rem;
+}
+
+.leaderboard-row.is-current {
+    border-color: rgba(255, 217, 102, 0.7);
+    background: rgba(230, 184, 0, 0.12);
+    box-shadow: 0 0 14px rgba(255, 217, 102, 0.12);
+}
+
+.leaderboard-rank {
+    color: var(--muted);
+    font-weight: 800;
+    text-align: center;
+}
+
+.leaderboard-rank.rank-1 { color: #ffe58a; }
+.leaderboard-rank.rank-2 { color: #d9e2ec; }
+.leaderboard-rank.rank-3 { color: #e5a66f; }
+
+.leaderboard-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.leaderboard-score {
+    color: var(--gold-light);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 700;
+}
+
+.leaderboard-divider {
+    height: 1px;
+    margin: 14px 8px;
+    background: linear-gradient(90deg, transparent, rgba(255, 217, 102, 0.48), transparent);
+}
+
+.leaderboard-position {
+    margin: 0 0 8px;
+    color: var(--gold-soft);
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-align: center;
 }
 
 #gameData {
@@ -652,6 +746,22 @@ span.change-link:hover {
 
     #clickMe {
         font-size: 1.35rem;
+    }
+}
+
+@media (max-width: 760px) {
+    #gameLayout {
+        grid-template-columns: minmax(0, 560px);
+        justify-content: center;
+    }
+
+    #game,
+    #leaderboard {
+        width: 100%;
+    }
+
+    #leaderboard {
+        position: static;
     }
 }
 

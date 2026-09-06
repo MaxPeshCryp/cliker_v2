@@ -235,6 +235,28 @@ def get_user(db, user_id):
     return db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
+def get_leaderboard(db, user_id):
+    """Return the podium and the signed-in player's immediate ranking context."""
+    players = db.execute(
+        "SELECT id, nickname, total_earned FROM users ORDER BY total_earned DESC, id ASC"
+    ).fetchall()
+    current_index = next(index for index, player in enumerate(players) if player["id"] == user_id)
+
+    def serialize(player, rank):
+        return {
+            "rank": rank,
+            "nickname": player["nickname"],
+            "score": player["total_earned"],
+            "isCurrentUser": player["id"] == user_id,
+        }
+
+    top = [serialize(player, index + 1) for index, player in enumerate(players[:3])]
+    start = max(0, current_index - 3)
+    end = min(len(players), current_index + 4)
+    around = [serialize(player, index + 1) for index, player in enumerate(players[start:end], start)]
+    return {"top": top, "around": around, "currentRank": current_index + 1, "totalPlayers": len(players)}
+
+
 def get_levels(db, table, key_column, user_id):
     ensure_user_rows(db, user_id)
     rows = db.execute(f"SELECT {key_column}, level FROM {table} WHERE user_id = ?", (user_id,)).fetchall()
@@ -438,6 +460,7 @@ def build_state(db, user_id, auto_income=0):
         "activeTheme": user["active_theme"],
         "investments": [dict(row) for row in investments],
         "achievements": achievements,
+        "leaderboard": get_leaderboard(db, user_id),
         "catalog": serialize_catalog(),
     }
 

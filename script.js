@@ -3,6 +3,7 @@ const formRegister = document.querySelector("#form-register")
 const formLogin = document.querySelector("#form-login")
 const changeRegister = document.querySelector("#change-register")
 const gameBlock = document.querySelector("#game")
+const gameLayout = document.querySelector("#gameLayout")
 const buttonClickMe = document.querySelector("#clickMe")
 const buttonClickForceUpgrade = document.querySelector("#clickForceUpgrade")
 const robotsIncome = document.querySelector("#robotsIncome")
@@ -167,7 +168,7 @@ async function restoreSession() {
 function openGame(state) {
     formRegister.style.display = "none"
     formLogin.style.display = "none"
-    gameBlock.style.display = "block"
+    gameLayout.style.display = "grid"
     applyGameState(state)
     showCollectedIncome(state.autoIncome)
     startIncomeCollection()
@@ -182,7 +183,39 @@ function applyGameState(state) {
     updateCountDisplay()
     updateUpgradeButton()
     renderRobots()
+    renderLeaderboard()
     renderEndgame()
+}
+
+function renderLeaderboard() {
+    const leaderboard = gameState.leaderboard
+    if (!leaderboard) return
+    const top = document.querySelector("#leaderboardTop")
+    const around = document.querySelector("#leaderboardAround")
+    const position = document.querySelector("#leaderboardPosition")
+    top.replaceChildren(...leaderboard.top.map(createLeaderboardRow))
+    around.replaceChildren(...leaderboard.around.map(createLeaderboardRow))
+    position.textContent = `Ваше место: #${leaderboard.currentRank} из ${leaderboard.totalPlayers}`
+}
+
+function createLeaderboardRow(player) {
+    const row = document.createElement("div")
+    row.className = `leaderboard-row${player.isCurrentUser ? " is-current" : ""}`
+
+    const rank = document.createElement("span")
+    rank.className = `leaderboard-rank rank-${Math.min(player.rank, 3)}`
+    rank.textContent = player.rank
+
+    const name = document.createElement("span")
+    name.className = "leaderboard-name"
+    name.textContent = player.isCurrentUser ? `${player.nickname} (вы)` : player.nickname
+
+    const score = document.createElement("span")
+    score.className = "leaderboard-score"
+    score.textContent = formatNumber(player.score).text
+
+    row.append(rank, name, score)
+    return row
 }
 
 function updateCountDisplay() {
