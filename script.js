@@ -11,6 +11,7 @@ const robotsList = document.querySelector("#robotsList")
 const prestigePanel = document.querySelector("#prestigePanel")
 const endgameContent = document.querySelector("#endgameContent")
 const endgameTabs = document.querySelector(".endgame-tabs")
+const leaderboardTabs = document.querySelector("#leaderboardTabs")
 const NUMBER_SUFFIXES = [
     { value: 1, suffix: "", className: "count-rank-base" },
     { value: 1e3, suffix: "K", className: "count-rank-k" },
@@ -30,6 +31,7 @@ let gameState = null
 let incomeTimer = null
 let actionQueue = Promise.resolve()
 let activeEndgameTab = "research"
+let activeLeaderboardSort = "total_earned"
 
 changeLogin.onclick = function () {
     formRegister.style.display = "none"
@@ -100,6 +102,21 @@ endgameTabs.addEventListener("click", (event) => {
     renderEndgame()
 })
 
+leaderboardTabs.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-leaderboard-sort]")
+    if (!button || button.dataset.leaderboardSort === activeLeaderboardSort) return
+    const previousSort = activeLeaderboardSort
+    activeLeaderboardSort = button.dataset.leaderboardSort
+    try {
+        const leaderboard = await apiRequest("/api/leaderboard")
+        gameState.leaderboard = leaderboard
+        renderLeaderboard()
+    } catch (error) {
+        activeLeaderboardSort = previousSort
+        alert(error.message)
+    }
+})
+
 endgameContent.addEventListener("click", (event) => {
     const button = event.target.closest("[data-action]")
     if (!button || button.disabled) return
@@ -149,7 +166,7 @@ function enqueueGameAction(url, body = null) {
 
 async function apiRequest(url, options = {}) {
     const response = await fetch(url, {
-        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        headers: { "Content-Type": "application/json", "X-Leaderboard-Sort": activeLeaderboardSort, ...(options.headers || {}) },
         ...options
     })
     const data = await response.json()
@@ -193,6 +210,13 @@ function renderLeaderboard() {
     const top = document.querySelector("#leaderboardTop")
     const around = document.querySelector("#leaderboardAround")
     const position = document.querySelector("#leaderboardPosition")
+    if (leaderboard.sortBy !== activeLeaderboardSort) return
+    document.querySelector(".leaderboard-caption").textContent = `По критерию: ${leaderboard.label}`
+    leaderboardTabs.querySelectorAll("button").forEach((button) => {
+        const isActive = button.dataset.leaderboardSort === activeLeaderboardSort
+        button.classList.toggle("is-active", isActive)
+        button.setAttribute("aria-pressed", String(isActive))
+    })
     top.replaceChildren(...leaderboard.top.map(createLeaderboardRow))
     around.replaceChildren(...leaderboard.around.map(createLeaderboardRow))
     position.textContent = `Ваше место: #${leaderboard.currentRank} из ${leaderboard.totalPlayers}`

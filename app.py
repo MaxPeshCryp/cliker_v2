@@ -96,6 +96,11 @@ ACHIEVEMENTS = {
 INVESTMENT_DURATION = 30
 MAINTENANCE_BASE_RATE = 0.08
 PRESTIGE_MIN_BALANCE = 1_000_000_000
+LEADERBOARD_SORTS = {
+    "balance": {"column": "balance", "label": "Текущий баланс"},
+    "total_earned": {"column": "total_earned", "label": "Всего заработано"},
+    "prestige_points": {"column": "prestige_points", "label": "Престиж"},
+}
 
 app = Flask(__name__, static_folder=None)
 # A deployment must provide CLICKER_SECRET_KEY.  The random development fallback
@@ -235,10 +240,17 @@ def get_user(db, user_id):
     return db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 
-def get_leaderboard(db, user_id):
+def get_requested_leaderboard_sort():
+    requested_sort = request.headers.get("X-Leaderboard-Sort", "total_earned")
+    return requested_sort if requested_sort in LEADERBOARD_SORTS else "total_earned"
+
+
+def get_leaderboard(db, user_id, sort_by=None):
     """Return the podium and the signed-in player's immediate ranking context."""
+    sort_by = sort_by or get_requested_leaderboard_sort()
+    sort = LEADERBOARD_SORTS[sort_by]
     players = db.execute(
-        "SELECT id, nickname, total_earned FROM users ORDER BY total_earned DESC, id ASC"
+        f"SELECT id, nickname, {sort['column']} AS score FROM users ORDER BY {sort['column']} DESC, id ASC"
     ).fetchall()
     current_index = next(index for index, player in enumerate(players) if player["id"] == user_id)
 
@@ -246,7 +258,7 @@ def get_leaderboard(db, user_id):
         return {
             "rank": rank,
             "nickname": player["nickname"],
-            "score": player["total_earned"],
+            "score": player["score"],
             "isCurrentUser": player["id"] == user_id,
         }
 
@@ -254,7 +266,14 @@ def get_leaderboard(db, user_id):
     start = max(0, current_index - 3)
     end = min(len(players), current_index + 4)
     around = [serialize(player, index + 1) for index, player in enumerate(players[start:end], start)]
-    return {"top": top, "around": around, "currentRank": current_index + 1, "totalPlayers": len(players)}
+    return {
+        "sortBy": sort_by,
+        "label": sort["label"],
+        "top": top,
+        "around": around,
+        "currentRank": current_index + 1,
+        "totalPlayers": len(players),
+    }
 
 
 def get_levels(db, table, key_column, user_id):
@@ -526,6 +545,13 @@ def state():
     with db_connection() as db:
         reset_income_timer(db, session["user_id"])
         return jsonify(build_state(db, session["user_id"], 0))
+
+
+@app.get("/api/leaderboard")
+@require_user
+def leaderboard():
+    with db_connection() as db:
+        return jsonify(get_leaderboard(db, session["user_id"]))
 
 
 @app.post("/api/click")

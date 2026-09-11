@@ -211,8 +211,34 @@ span.change-link:hover {
 .leaderboard-caption {
     margin: 8px 0 14px;
     color: var(--muted);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     text-align: center;
+}
+
+.leaderboard-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+    margin: 0 0 14px;
+}
+
+.leaderboard-tabs button {
+    min-height: 34px;
+    margin: 0;
+    padding: 6px 4px;
+    border: 1px solid rgba(255, 217, 102, 0.22);
+    border-radius: 9px;
+    color: var(--gold-soft);
+    background: rgba(255, 217, 102, 0.06);
+    box-shadow: none;
+    font-size: 0.75rem;
+    line-height: 1.1;
+}
+
+.leaderboard-tabs button.is-active {
+    color: #2c1a0a;
+    background: radial-gradient(circle at 30% 10%, var(--gold-light), var(--gold));
+    box-shadow: 0 3px 0 var(--gold-dark);
 }
 
 .leaderboard-list {
@@ -230,7 +256,7 @@ span.change-link:hover {
     grid-template-columns: 28px minmax(0, 1fr) auto;
     gap: 8px;
     align-items: center;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
 }
 
 .leaderboard-row.is-current {
@@ -270,7 +296,7 @@ span.change-link:hover {
 .leaderboard-position {
     margin: 0 0 8px;
     color: var(--gold-soft);
-    font-size: 0.66rem;
+    font-size: 0.75rem;
     font-weight: 700;
     text-align: center;
 }

@@ -65,8 +65,8 @@ class ClickerApiTests(unittest.TestCase):
         with clicker.db_connection() as db:
             for index, score in enumerate((900, 800, 700, 600, 500, 400, 300), start=1):
                 db.execute(
-                    "INSERT INTO users (nickname, email, password_hash, last_income_at, total_earned) VALUES (?, ?, ?, ?, ?)",
-                    (f"Player {index}", f"player{index}@example.com", "hash", 0, score),
+                    "INSERT INTO users (nickname, email, password_hash, last_income_at, balance, total_earned, prestige_points) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (f"Player {index}", f"player{index}@example.com", "hash", 0, 1_000 - score, score, index),
                 )
 
         response = self.client.get("/api/state")
@@ -76,6 +76,22 @@ class ClickerApiTests(unittest.TestCase):
         self.assertEqual(leaderboard["currentRank"], 8)
         self.assertEqual([player["nickname"] for player in leaderboard["around"]], ["Player 5", "Player 6", "Player 7", "Tester"])
         self.assertTrue(leaderboard["around"][-1]["isCurrentUser"])
+
+    def test_leaderboard_can_be_sorted_by_balance_or_prestige(self):
+        self.register_and_login()
+        with clicker.db_connection() as db:
+            db.execute("UPDATE users SET balance = 50, total_earned = 500, prestige_points = 2 WHERE email = ?", ("tester@example.com",))
+            db.execute(
+                "INSERT INTO users (nickname, email, password_hash, last_income_at, balance, total_earned, prestige_points) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                ("Rival", "rival@example.com", "hash", 0, 100, 300, 5),
+            )
+
+        balance = self.client.get("/api/leaderboard", headers={"X-Leaderboard-Sort": "balance"}).get_json()
+        prestige = self.client.get("/api/leaderboard", headers={"X-Leaderboard-Sort": "prestige_points"}).get_json()
+        self.assertEqual(balance["sortBy"], "balance")
+        self.assertEqual(balance["top"][0]["nickname"], "Rival")
+        self.assertEqual(prestige["sortBy"], "prestige_points")
+        self.assertEqual(prestige["top"][0]["nickname"], "Rival")
 
 
 if __name__ == "__main__":
