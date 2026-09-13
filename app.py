@@ -7,8 +7,10 @@ from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, jsonify, request, send_from_directory, session
+from flask import Flask, has_request_context, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
+
+import timed_games
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -126,6 +128,9 @@ def db_connection():
     connection = get_db()
     try:
         with connection:
+            if has_request_context() and request.path.startswith("/api/"):
+                connection.execute("BEGIN IMMEDIATE")
+                timed_games.synchronize(connection, timed_games.now_ms(), session.get("user_id"))
             yield connection
     finally:
         connection.close()
@@ -213,6 +218,7 @@ def init_db():
         add_column_if_missing(db, "users", "total_earned", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "total_spent", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "active_theme", "TEXT NOT NULL DEFAULT 'classic'")
+        timed_games.init_db(db)
 
 def ensure_user_rows(db, user_id):
     for robot_id in ROBOTS:
@@ -443,6 +449,7 @@ def serialize_catalog():
 
 
 def build_state(db, user_id, auto_income=0):
+    timed_state = timed_games.build_state(db, user_id)
     ensure_user_rows(db, user_id)
     unlock_achievements(db, user_id)
     user = get_user(db, user_id)
@@ -469,6 +476,8 @@ def build_state(db, user_id, auto_income=0):
         "robotsIncomeGross": robots_income_gross,
         "maintenanceCost": maintenance,
         "autoIncome": auto_income,
+        "timedRewardIncome": timed_state["rewardRate"],
+        "timedGames": timed_state,
         "prestigePoints": user["prestige_points"],
         "prestigeMultiplier": prestige_multiplier(user),
         "research": research,
@@ -497,6 +506,11 @@ def stylesheet():
 @app.get("/script.js")
 def script():
     return send_from_directory(BASE_DIR, "script.js")
+
+
+@app.get("/timed-games.js")
+def timed_script():
+    return send_from_directory(BASE_DIR, "timed-games.js")
 
 
 @app.post("/api/register")
@@ -755,6 +769,7 @@ def fusion():
         return jsonify(build_state(db, user_id, auto_income))
 
 
+timed_games.register_routes(app, db_connection, require_user, build_state)
 init_db()
 
 
