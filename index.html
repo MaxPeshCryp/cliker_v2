@@ -5,8 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Кликер</title>
-    <link rel="stylesheet" href="./style.css?v=10">
-    <script src="./script.js?v=10" defer> </script>
+    <link rel="stylesheet" href="./style.css?v=13">
+    <script src="./script.js?v=13" defer> </script>
+    <script src="./timed-games.js?v=13" defer></script>
 </head>
 
 <body>
@@ -47,6 +48,55 @@
     </form>
 
     <div id="gameLayout">
+        <section id="timedGames" aria-labelledby="timedGamesTitle">
+            <div class="timed-heading">
+                <div><p class="timed-eyebrow">КАЖДЫЙ РАЗ С НУЛЯ</p><h2 id="timedGamesTitle">Игры на время</h2></div>
+                <p id="timedReward" class="timed-reward">Доход за места: 0/сек</p>
+            </div>
+            <div id="timedModes" class="timed-modes"></div>
+            <dialog id="timedDialog" aria-labelledby="timedDialogTitle">
+            <div class="timed-dialog-heading">
+                <h2 id="timedDialogTitle">Игры на время</h2>
+                <button type="button" id="timedClose" aria-label="Закрыть мини-игру">✕</button>
+            </div>
+            <p id="timedError" role="alert" hidden></p>
+            <div class="timed-dialog-content"><div class="timed-play-column">
+            <div id="timedArena" hidden>
+                <div id="timedCountdown" role="status" hidden><span>Приготовьтесь</span><strong id="timedCountdownNumber">3</strong><span>Игра начнётся после отсчёта</span></div>
+                <div class="timed-arena-heading"><h3 id="timedRunTitle"></h3><strong id="timedClock" role="timer">00:00</strong></div>
+                <progress id="timedProgress" max="1" value="1" aria-label="Оставшееся время"></progress>
+                <div class="timed-stats">
+                    <p class="timed-wallet">На счёте<strong id="timedBalance">0</strong><span id="timedIncomePop" aria-hidden="true">+0</span></p>
+                    <p>От роботов<strong id="timedIncome">0/сек</strong></p>
+                </div>
+                <button type="button" id="timedClick">Заработать +1</button>
+                <div id="timedUpgrades" class="timed-upgrades">
+                    <article class="timed-upgrade" data-upgrade-card="click"><h4>Сила клика</h4><p data-upgrade-description>+1 монета за каждый клик</p><p data-upgrade-level></p><button type="button" data-timed-upgrade="click"></button></article>
+                    <article class="timed-upgrade" data-upgrade-card="robot"><h4>Робот</h4><p data-upgrade-description></p><p data-upgrade-level></p><button type="button" data-timed-upgrade="robot"></button></article>
+                    <article class="timed-upgrade" data-upgrade-card="engine"><h4>Ускорение роботов</h4><p data-upgrade-description>+1/сек каждому роботу</p><p data-upgrade-level></p><button type="button" data-timed-upgrade="engine"></button></article>
+                </div>
+                <p class="timed-help">До 10 кликов в секунду. Таймер продолжает идти при закрытии страницы. Основной баланс и бонусы не используются.</p>
+            </div>
+            <div id="timedResult" role="status" hidden>
+                <h3 id="timedResultTitle"></h3><p id="timedResultScore" class="timed-result-score"></p><p id="timedResultDetail"></p>
+                <button type="button" id="timedReplay" data-timed-start="60">Сыграть ещё раз с нуля</button>
+            </div>
+            <details class="timed-history"><summary>Последние 10 результатов</summary><div id="timedHistory"></div></details>
+            </div>
+            <section id="timedRankingPanel" aria-labelledby="timedRankingTitle">
+            <div class="timed-rank-heading"><h3 id="timedRankingTitle">Рейтинг мини-игры</h3><div id="timedRankTabs" role="group" aria-label="Длительность мини-игры">
+                <button type="button" data-timed-rank="60">1 мин</button><button type="button" data-timed-rank="180">3 мин</button><button type="button" data-timed-rank="300">5 мин</button>
+            </div></div>
+            <div id="timedRanking" class="leaderboard-list"></div>
+            <p id="timedPosition" class="timed-help"></p>
+            <div id="timedAround" class="leaderboard-list"></div>
+            <details class="timed-rules"><summary>Правила и награды</summary>
+            <p class="timed-help">Один игрок — одно место по лучшей попытке. При равном заработке выше тот, кто раньше установил рекорд. Доход за места начисляется на основной баланс, в том числе вне игры, пока вы в тройке. Награды трёх рейтингов суммируются.</p>
+            <p class="timed-help">Побеждает тот, у кого больше монет на счёте в момент финиша. Покупки уменьшают счёт. Перед стартом — отсчёт 3 секунды, затем полные 1, 3 или 5 минут игры. Закрытие окна не останавливает забег.</p>
+            </details>
+            </section></div>
+            </dialog>
+        </section>
         <div id="game">
             <div id="gameData">
             <p>

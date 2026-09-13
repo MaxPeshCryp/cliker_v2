@@ -192,9 +192,13 @@ function openGame(state) {
 }
 
 function applyGameState(state) {
+    if (state.timedGames && gameState?.timedGames && state.timedGames.serverNow < gameState.timedGames.serverNow) return
+    const previousTheme = gameState?.activeTheme
     gameState = state
-    document.body.classList.remove("theme-gold_theme", "theme-neon_theme", "theme-royal_theme")
-    if (state.activeTheme && state.activeTheme !== "classic") document.body.classList.add(`theme-${state.activeTheme}`)
+    if (previousTheme !== state.activeTheme) {
+        document.body.classList.remove("theme-gold_theme", "theme-neon_theme", "theme-royal_theme")
+        if (state.activeTheme && state.activeTheme !== "classic") document.body.classList.add(`theme-${state.activeTheme}`)
+    }
     gameBlock.querySelector("#name").textContent = state.userNik
     gameBlock.querySelector("#clickForce").textContent = formatNumber(state.clickForce).text
     updateCountDisplay()
@@ -202,6 +206,7 @@ function applyGameState(state) {
     renderRobots()
     renderLeaderboard()
     renderEndgame()
+    window.renderTimedGames?.(state.timedGames)
 }
 
 function renderLeaderboard() {
@@ -217,8 +222,8 @@ function renderLeaderboard() {
         button.classList.toggle("is-active", isActive)
         button.setAttribute("aria-pressed", String(isActive))
     })
-    top.replaceChildren(...leaderboard.top.map(createLeaderboardRow))
-    around.replaceChildren(...leaderboard.around.map(createLeaderboardRow))
+    updateChildren(top, leaderboard.top.map(createLeaderboardRow))
+    updateChildren(around, leaderboard.around.map(createLeaderboardRow))
     position.textContent = `Ваше место: #${leaderboard.currentRank} из ${leaderboard.totalPlayers}`
 }
 
@@ -254,8 +259,8 @@ function updateUpgradeButton() {
 }
 
 function renderRobots() {
-    robotsIncome.textContent = `Автодоход: ${formatNumber(gameState.robotsIncome).text}/сек | обслуживание: ${formatNumber(gameState.maintenanceCost).text}/сек | максимум уровня: ${gameState.robotMaxLevel}`
-    robotsList.innerHTML = ""
+    robotsIncome.textContent = `Автодоход: ${formatNumber(gameState.robotsIncome).text}/сек | за места: +${formatNumber(gameState.timedRewardIncome || 0).text}/сек | обслуживание: ${formatNumber(gameState.maintenanceCost).text}/сек | максимум уровня: ${gameState.robotMaxLevel}`
+    const cards = []
     Object.entries(gameState.catalog.robots).forEach(([robotId, robot]) => {
         const level = gameState.robots[robotId]?.level || 0
         const locked = gameState.prestigePoints < robot.requiresPrestige
@@ -279,8 +284,41 @@ function renderRobots() {
                 <p>${level < maxLevel && !locked ? `Следующая сила: ${formatNumber(nextPower).text}/сек` : locked ? "Откроется через престиж" : "Все улучшения куплены"}</p>
             </div>
             <button type="button" data-robot-id="${robotId}" ${locked || level >= maxLevel ? "disabled" : ""}>${buttonText}</button>`
-        robotsList.append(card)
+        cards.push(card)
     })
+    updateChildren(robotsList, cards)
+}
+
+// Reconcile the fixed-order UI in place so polling preserves focus and animations.
+function updateChildren(parent, nextChildren) {
+    const previousChildren = Array.from(parent.childNodes)
+    nextChildren.forEach((next, index) => {
+        const previous = previousChildren[index]
+        if (!previous) {
+            parent.append(next)
+        } else if (previous.nodeType !== next.nodeType || previous.nodeName !== next.nodeName) {
+            previous.replaceWith(next)
+        } else if (next.nodeType === Node.ELEMENT_NODE) {
+            for (const attribute of Array.from(previous.attributes)) {
+                if (!next.hasAttribute(attribute.name)) previous.removeAttribute(attribute.name)
+            }
+            for (const attribute of Array.from(next.attributes)) {
+                if (previous.getAttribute(attribute.name) !== attribute.value) {
+                    previous.setAttribute(attribute.name, attribute.value)
+                }
+            }
+            updateChildren(previous, Array.from(next.childNodes))
+        } else if (previous.nodeValue !== next.nodeValue) {
+            previous.nodeValue = next.nodeValue
+        }
+    })
+    previousChildren.slice(nextChildren.length).forEach((child) => child.remove())
+}
+
+function updateHtml(parent, html) {
+    const template = document.createElement("template")
+    template.innerHTML = html
+    updateChildren(parent, Array.from(template.content.childNodes))
 }
 
 function renderEndgame() {
@@ -289,6 +327,11 @@ function renderEndgame() {
     endgameTabs.querySelectorAll("button").forEach((button) => {
         button.classList.toggle("is-active", button.dataset.endgameTab === activeEndgameTab)
     })
+    // Keep the live form (values and focus) intact during income updates.
+    if (activeEndgameTab === "investments" && endgameContent.querySelector("#investmentForm")) {
+        updateHtml(endgameContent.querySelector("#investmentList"), renderInvestmentList())
+        return
+    }
     const renderers = {
         research: renderResearch,
         boosts: renderBoosts,
@@ -297,19 +340,24 @@ function renderEndgame() {
         investments: renderInvestments,
         achievements: renderAchievements
     }
-    endgameContent.innerHTML = renderers[activeEndgameTab]()
+    if (endgameContent.dataset.tab !== activeEndgameTab) {
+        endgameContent.innerHTML = renderers[activeEndgameTab]()
+        endgameContent.dataset.tab = activeEndgameTab
+    } else {
+        updateHtml(endgameContent, renderers[activeEndgameTab]())
+    }
 }
 
 function renderPrestigePanel() {
     const canPrestige = gameState.userCount >= gameState.catalog.prestigeMinBalance
-    prestigePanel.innerHTML = `
+    updateHtml(prestigePanel, `
         <div>
             <h3>Престиж: ${gameState.prestigePoints}</h3>
             <p>Постоянный множитель: x${gameState.prestigeMultiplier.toFixed(2)}</p>
             <p>Минимум для сброса: ${formatNumber(gameState.catalog.prestigeMinBalance).text}</p>
         </div>
         <button type="button" data-action="prestige" ${canPrestige ? "" : "disabled"}>Сделать престиж</button>
-        <button type="button" data-action="fusion">Слияние роботов</button>`
+        <button type="button" data-action="fusion">Слияние роботов</button>`)
 }
 
 function renderResearch() {
@@ -342,11 +390,14 @@ function renderCollections() {
     }).join("")
 }
 
-function renderInvestments() {
-    const list = gameState.investments.map((investment) => {
+function renderInvestmentList() {
+    return gameState.investments.map((investment) => {
         const left = Math.max(0, investment.ready_at - Math.floor(Date.now() / 1000))
         return `<p>Вклад ${formatNumber(investment.amount).text} -> ${formatNumber(investment.payout_amount).text}, готов через ${left} сек.${investment.risky ? " Риск 50%." : ""}</p>`
     }).join("") || "<p>Активных инвестиций нет.</p>"
+}
+
+function renderInvestments() {
     return `
         <form id="investmentForm" class="endgame-card">
             <h3>Инвестиции</h3>
@@ -355,7 +406,7 @@ function renderInvestments() {
             <label class="inline-check"><input name="risky" type="checkbox"> рискованная</label>
             <button type="submit">Вложить</button>
         </form>
-        <div class="endgame-card">${list}<button type="button" data-action="collect-investments">Забрать готовые</button></div>`
+        <div class="endgame-card"><div id="investmentList">${renderInvestmentList()}</div><button type="button" data-action="collect-investments">Забрать готовые</button></div>`
 }
 
 function renderAchievements() {

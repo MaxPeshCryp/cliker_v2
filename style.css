@@ -13,6 +13,122 @@
     --danger: #ff8166;
 }
 
+[hidden] { display: none !important; }
+
+#timedGames {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 16px;
+    border: 1px solid rgba(255, 217, 102, 0.34);
+    border-radius: 18px;
+    background: linear-gradient(150deg, #263440, #111720 70%);
+    font-family: system-ui, sans-serif;
+    line-height: 1.5;
+}
+.timed-heading, .timed-arena-heading, .timed-rank-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+#timedGames h2 { margin: 2px 0 12px; text-align: left; }
+.timed-eyebrow { font-size: 0.7rem; letter-spacing: 0.12em; color: var(--gold-light); }
+.timed-help { color: var(--muted); font-size: 0.85rem; margin: 12px 0; }
+.timed-reward { color: var(--gold-light); font-weight: 700; }
+.timed-modes, .timed-upgrades, .timed-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.timed-mode, .timed-upgrade { padding: 12px; background: #0d151e; border: 1px solid #4c4936; border-radius: 12px; }
+.timed-mode h3 { font-size: 1.2rem; margin: 0; }
+.timed-mode-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.timed-mode .timed-eyebrow { font-size: 0.65rem; letter-spacing: 0; }
+.timed-mode-actions { display: flex; gap: 8px; margin-top: 10px; }
+#timedGames .timed-mode-actions button { min-height: 34px; margin: 0; padding: 8px; font-size: 0.8rem; border-radius: 9px; box-shadow: none; }
+#timedGames .timed-secondary { color: var(--gold-light); background: transparent; border: 1px solid #4c4936; }
+.timed-mode p, .timed-upgrade p { font-size: 0.8rem; overflow-wrap: anywhere; }
+.timed-prizes { color: var(--gold-light); margin-top: 8px; }
+#timedGames button { font-family: inherit; font-size: 0.9rem; padding: 11px 12px; letter-spacing: 0; }
+#timedGames button:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+#timedArena { position: relative; margin-top: 12px; padding: 16px; border: 1px solid var(--gold); border-radius: 14px; background: #101c26; }
+#timedClock { font-size: clamp(1.15rem, 4vw, 2rem); font-variant-numeric: tabular-nums; color: var(--gold-light); }
+#timedClock.is-ending { color: var(--danger); }
+#timedProgress { width: 100%; height: 8px; accent-color: var(--gold); margin: 12px 0; }
+.timed-stats { grid-template-columns: 1fr 1fr; text-align: center; margin: 12px 0; }
+.timed-wallet { position: relative; }
+#timedIncomePop { position: absolute; left: 65%; top: 16px; opacity: 0; pointer-events: none; font-size: 1.35rem; font-weight: 800; color: #92efb7; text-shadow: 0 2px 8px #000; }
+#timedCountdown { position: absolute; inset: 0; z-index: 2; border-radius: inherit; background: #101c26ed; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--gold-light); text-align: center; padding: 20px; }
+#timedCountdownNumber { font-size: 6rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.timed-dialog-content { display: grid; grid-template-columns: minmax(0, 1fr) 280px; align-items: start; gap: 18px; }
+.timed-play-column { min-width: 0; }
+#timedRankingPanel { min-width: 0; margin-top: 12px; padding: 14px; border: 1px solid #4c4936; border-radius: 12px; background: #0d151e; }
+#timedRankingPanel .timed-rank-heading { margin-top: 0; gap: 10px; }
+#timedRankingPanel .leaderboard-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 6px; padding: 8px; }
+#timedAround .leaderboard-rank { background: #263440; color: var(--muted); }
+.timed-rules { font-size: 0.8rem; margin-top: 16px; }
+.timed-rules summary { cursor: pointer; color: var(--gold-light); }
+.timed-stats p { font-size: 0.8rem; color: var(--muted); }
+.timed-stats strong { display: block; color: var(--text); font-size: clamp(1rem, 3vw, 1.6rem); overflow-wrap: anywhere; }
+#timedGames #timedClick { min-height: 70px; font-size: 1.35rem; margin: 10px 0 18px; touch-action: manipulation; }
+.timed-upgrade { display: flex; flex-direction: column; gap: 7px; }
+.timed-upgrade button { margin-top: auto; }
+#timedResult { margin-top: 20px; padding: 20px; border: 1px solid var(--gold); border-radius: 12px; }
+.timed-result-score { font-size: 1.7rem; font-weight: 800; margin: 8px 0; color: var(--gold-light); }
+.timed-rank-heading { margin-top: 24px; }
+#timedRankTabs { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; gap: 6px; }
+#timedGames #timedRankTabs button { min-height: 36px; padding: 6px 8px; border-radius: 8px; white-space: nowrap; font-size: 0.8rem; }
+#timedRankTabs button { margin: 0; background: #1a2630; color: var(--muted); box-shadow: none; border: 1px solid #4c4936; }
+#timedRankTabs button.is-active { background: var(--gold); color: #151515; }
+#timedRanking { margin-top: 12px; }
+#timedRanking .leaderboard-row { grid-template-columns: 36px minmax(0, 1fr) auto; }
+.timed-history { margin-top: 18px; border-top: 1px solid #4c4936; padding-top: 16px; font-size: 0.85rem; }
+.timed-history summary { cursor: pointer; color: var(--gold-light); }
+.timed-modal-open { overflow: hidden; }
+#timedDialog {
+    position: fixed;
+    margin: auto;
+    width: min(1040px, calc(100% - 32px));
+    max-height: calc(100dvh - 32px);
+    padding: 20px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid #82703d;
+    border-radius: 18px;
+    background: #111b25;
+    color: var(--text);
+    box-shadow: 0 24px 80px #0009;
+    scrollbar-gutter: stable;
+}
+#timedDialog::backdrop { background: #03070dcc; backdrop-filter: blur(4px); }
+.timed-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+#timedGames #timedDialogTitle { margin: 0; font-size: 1.15rem; }
+#timedGames #timedClose { width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0; flex-shrink: 0; background: #263440; color: var(--text); border-radius: 9px; box-shadow: none; }
+#timedHistory p { margin-top: 8px; }
+#timedError { color: var(--danger); margin-top: 12px; }
+@media (max-width: 850px) {
+    .timed-dialog-content { grid-template-columns: 1fr; }
+    #timedRankingPanel { grid-row: 1; }
+    #timedRankingPanel .leaderboard-row { padding: 5px 8px; }
+    #timedRankingPanel .timed-help { margin: 8px 0; }
+}
+@media (max-width: 600px) {
+    #timedGames { padding: 16px; }
+    .timed-heading { gap: 4px; margin-bottom: 8px; }
+    .timed-reward { font-size: 0.85rem; }
+    .timed-modes, .timed-upgrades { grid-template-columns: 1fr; }
+    .timed-mode { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 10px; }
+    .timed-mode-heading { justify-content: flex-start; }
+    .timed-mode > p { grid-column: 1; }
+    .timed-mode .timed-prizes { margin-top: 0; font-size: 0.7rem; }
+    .timed-mode-actions { grid-column: 2; grid-row: 1 / 4; flex-direction: column; justify-content: center; gap: 5px; margin: 0; }
+    #timedGames .timed-mode-actions button { padding: 6px 12px; }
+    #timedDialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); padding: 12px; scrollbar-gutter: auto; }
+    .timed-upgrade { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; }
+    .timed-upgrade p { grid-column: 1; }
+    .timed-upgrade button { grid-column: 2; grid-row: 1 / 4; align-self: center; margin: 0; }
+    #timedArena { padding: 12px; }
+    .timed-stats { gap: 6px; }
+    #timedRanking .leaderboard-row { gap: 6px; }
+}
+
 * {
     margin: 0;
     padding: 0;
