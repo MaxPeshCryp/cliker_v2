@@ -207,11 +207,16 @@
     }
 
     async function act(url, body) {
-        if (busy) return
-        busy = true
+        // Only starts and purchases are exclusive. Waiting for a click response
+        // must not discard further clicks or let a click unlock a pending purchase.
+        const exclusive = body.action !== "click"
+        if (exclusive && busy) return
+        if (exclusive) busy = true
         property(find("timedError"), "hidden", true)
-        renderModes()
-        renderRun()
+        if (exclusive) {
+            renderModes()
+            renderRun()
+        }
         try {
             applyGameState(await apiRequest(url, { method: "POST", body: JSON.stringify(body) }))
         } catch (error) {
@@ -219,9 +224,11 @@
             property(find("timedError"), "hidden", false)
             openDialog()
         } finally {
-            busy = false
-            renderModes()
-            renderRun()
+            if (exclusive) {
+                busy = false
+                renderModes()
+                renderRun()
+            }
         }
         if (url === "/api/timed/start" && state.active && dialog.open) find("timedClick").focus({ preventScroll: true })
     }

@@ -88,7 +88,28 @@ app.app.run(host='127.0.0.1', port=${port}, debug=False)
         await page.locator('#timedModes [data-timed-start="60"]').click()
         await page.locator('#timedArena').waitFor({ state: 'visible' })
         assert.equal(await page.locator('#timedBalance').textContent(), '0', 'Return must not restart the run')
-        for (let i = 1; i <= 15; i++) {
+        // Simulate a slow response without delaying delivery to the server.
+        // Three clicks above the server's 100 ms interval must all be submitted
+        // while the first response is still outstanding.
+        let rapidClickRequests = 0
+        const slowResponse = async route => {
+            rapidClickRequests++
+            const response = await route.fetch()
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            await route.fulfill({ response })
+        }
+        await page.route('**/api/timed/*/action', slowResponse)
+        for (let i = 0; i < 3; i++) {
+            await page.locator('#timedClick').click()
+            await page.waitForTimeout(150)
+        }
+        assert.equal(rapidClickRequests, 3, 'Slow responses must not discard rapid clicks')
+        await page.waitForFunction(() => document.querySelector('#timedBalance').textContent === '3')
+        const rapidState = await (await context.request.get(`${url}/api/state`)).json()
+        assert.equal(rapidState.timedGames.active.balance, 3, 'All three clicks must reach the server')
+        await page.unroute('**/api/timed/*/action', slowResponse)
+        await page.waitForTimeout(1100)
+        for (let i = 4; i <= 15; i++) {
             await page.locator('#timedClick').click()
             await page.waitForFunction(score => document.querySelector('#timedBalance').textContent === String(score), i)
             await page.waitForTimeout(110)
