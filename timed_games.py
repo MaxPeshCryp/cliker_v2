@@ -104,7 +104,7 @@ def settle_reward(db, reward, timestamp):
     elapsed = max(0, timestamp - reward["settled_at"])
     earned, remainder = divmod(elapsed * reward["rate"] + reward["remainder"], 1000)
     if earned:
-        db.execute("UPDATE users SET balance = balance + ?, total_earned = total_earned + ? WHERE id = ?",
+        db.execute("UPDATE users SET balance = amount_add(balance, ?), total_earned = amount_add(total_earned, ?) WHERE id = ?",
                    (earned, earned, reward["user_id"]))
     db.execute("UPDATE timed_rewards SET settled_at = ?, remainder = ? WHERE user_id = ? AND duration = ?",
                (max(timestamp, reward["settled_at"]), remainder, reward["user_id"], reward["duration"]))

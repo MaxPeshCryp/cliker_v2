@@ -26,7 +26,8 @@ const path = require('node:path')
                 collections: {}, achievements: {}, investments: [],
                 catalog: {robots: {r: {name: 'Robot', className: 'Test', requiresPrestige: 0, powers: [1, 2], buyCost: 10, upgradeCosts: [20]}},
                     research: {r: item}, boosts: {b: item}, cosmetics: {c: item},
-                    collections: {c: item}, achievements: {a: item}, prestigeMinBalance: 105, investmentDuration: 60},
+                    collections: {c: item}, achievements: {a: item}, prestigeMinBalance: 105, investmentDuration: 60,
+                    investmentPlans: {guaranteed: {name: 'Safe', profitPercent: 20, successChance: 100}, growth: {name: 'Growth', profitPercent: 100, successChance: 60}}},
                 leaderboard: {sortBy: 'total_earned', label: 'Score', top: [player], around: [player], currentRank: 1, totalPlayers: 1}
             }
             openGame(structuredClone(state))
@@ -50,12 +51,12 @@ const path = require('node:path')
             check(!document.querySelector('[data-action="prestige"]').disabled, 'Prestige eligibility stale')
             check(document.querySelector('.leaderboard-score').textContent === String(state.leaderboard.top[0].score), 'Leaderboard stale')
             const input = document.querySelector('[name="amount"]')
-            input.value = '12345'
+            input.value = '1.25 Qi'
             input.focus()
-            document.querySelector('[name="risky"]').checked = true
+            document.querySelector('[name="plan"]').value = 'growth'
             state.investments = [{amount: 10, payout_amount: 12, ready_at: 0, risky: false}]
             await window.incomeTick()
-            check(input.value === '12345' && document.activeElement === input && document.querySelector('[name="risky"]').checked, 'Investment form reset')
+            check(input.value === '1.25 Qi' && document.activeElement === input && document.querySelector('[name="plan"]').value === 'growth', 'Investment form reset')
             check(document.querySelector('#investmentList').textContent.includes('10 -> 12'), 'Investment not added')
             state.investments = []
             state.robots.r.level = 2

@@ -15,6 +15,13 @@
 
 [hidden] { display: none !important; }
 
+#investmentForm select { width: 100%; padding: 12px 8px; border: 1px solid #82703d; border-radius: 10px; background: #0b1118; color: var(--text); font: inherit; font-size: 0.8rem; }
+#investmentForm select:focus-visible { outline: 2px solid var(--gold-light); }
+.investment-amount-row { display: flex; gap: 8px; align-items: center; }
+.investment-amount-row input { min-width: 0; }
+#investmentForm .investment-amount-row button { width: auto; margin: 0; padding: 10px; flex-shrink: 0; border-radius: 10px; box-shadow: none; }
+#investmentAmountHint { font-size: 0.72rem; margin-top: 10px; }
+
 #timedGames {
     grid-column: 1 / -1;
     min-width: 0;

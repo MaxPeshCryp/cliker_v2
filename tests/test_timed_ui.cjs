@@ -31,6 +31,16 @@ def advance():
     global offset
     offset += app.request.get_json()['milliseconds']
     return {'ok': True}
+@app.app.post('/__test__/fund')
+def fund():
+    with app.db_connection() as db:
+        db.execute('UPDATE users SET balance = ? WHERE id = ?', (app.db_amount(int(app.request.get_json()['amount'])), app.session['user_id']))
+    return {'ok': True}
+@app.app.post('/__test__/mature-investments')
+def mature_investments():
+    with app.db_connection() as db:
+        db.execute('UPDATE investments SET ready_at = 0 WHERE user_id = ?', (app.session['user_id'],))
+    return {'ok': True}
 app.app.run(host='127.0.0.1', port=${port}, debug=False)
 `
     const child = spawn(process.env.PYTHON_EXE || 'python', ['-c', serverCode], {
@@ -241,6 +251,52 @@ app.app.run(host='127.0.0.1', port=${port}, debug=False)
             await page.screenshot({ path: path.join(process.env.UI_SCREENSHOT_DIR, 'timed-mobile.png') })
         }
         assert.deepEqual(errors, [])
+        // A separate investor has no timed rewards, so every unit can be checked.
+        const investorContext = await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+        const investor = { nickname: 'Investor', email: 'investor-ui@example.com', password: 'test-password' }
+        await investorContext.request.post(`${url}/api/register`, { data: investor })
+        await investorContext.request.post(`${url}/api/login`, { data: investor })
+        await investorContext.request.post(`${url}/__test__/fund`, { data: { amount: '20000000000000000007' } })
+        const investmentPage = await investorContext.newPage()
+        investmentPage.on('pageerror', error => errors.push(error.message))
+        const notices = []
+        investmentPage.on('dialog', async dialog => { notices.push(dialog.message()); await dialog.accept() })
+        await investmentPage.route('https://fonts.googleapis.com/**', route => route.abort())
+        await investmentPage.goto(url)
+        await investmentPage.locator('[data-endgame-tab="investments"]').click()
+        assert.equal(await investmentPage.locator('#investmentPlan option').count(), 5)
+        await investmentPage.locator('#investmentAmount').fill('12.000000000000000001 Qi')
+        await investmentPage.locator('#investmentPlan').selectOption('venture')
+        await investmentPage.waitForTimeout(1200)
+        assert.equal(await investmentPage.locator('#investmentAmount').inputValue(), '12.000000000000000001 Qi')
+        assert.equal(await investmentPage.locator('#investmentPlan').inputValue(), 'venture')
+        assert.match(await investmentPage.locator('#investmentPlanSummary').textContent(), /40%.*200%/)
+        await investmentPage.locator('#investmentPlan').selectOption('guaranteed')
+        const posted = investmentPage.waitForRequest(request => request.url().endsWith('/api/investments/create'))
+        await investmentPage.locator('#investmentForm [type="submit"]').click()
+        assert.deepEqual((await posted).postDataJSON(), { amount: '12.000000000000000001 Qi', plan: 'guaranteed' })
+        await investmentPage.waitForFunction(() => gameState.investments.length === 1)
+        assert.equal(await investmentPage.evaluate(() => gameState.userCountExact), '8000000000000000006')
+        assert.match(await investmentPage.locator('#investmentList').textContent(), /12Qi -> 14.4Qi/)
+        await investorContext.request.post(`${url}/__test__/mature-investments`)
+        await investmentPage.locator('[data-action="collect-investments"]').click()
+        await investmentPage.waitForFunction(() => gameState.investments.length === 0)
+        assert.equal(await investmentPage.evaluate(() => gameState.userCountExact), '22400000000000000007')
+        await investmentPage.locator('[data-action="invest-all"]').click()
+        assert.equal(await investmentPage.locator('#investmentAmount').inputValue(), '22400000000000000007')
+        await investmentPage.locator('#investmentAmount').fill('1,5qi')
+        await investmentPage.locator('#investmentPlan').selectOption('growth')
+        await investmentPage.locator('#investmentForm [type="submit"]').click()
+        await investmentPage.waitForFunction(() => gameState.investments.length === 1)
+        assert.equal(await investmentPage.evaluate(() => gameState.investments[0].success_chance), 60)
+        assert.equal(await investmentPage.evaluate(() => gameState.investments[0].amount), '1500000000000000000')
+        assert.ok(notices.some(message => message.includes('Успешных вкладов: 1')))
+        await investmentPage.setViewportSize({ width: 390, height: 844 })
+        assert.equal(await investmentPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
+        if (process.env.UI_SCREENSHOT_DIR) await investmentPage.locator('#investmentForm').screenshot({ path: path.join(process.env.UI_SCREENSHOT_DIR, 'investments-mobile.png') })
+        assert.deepEqual(errors, [])
+        await investorContext.close()
+        console.log('PASS: investment suffix input, exact Qi balances and payouts, all five plans, preserved form, all-balance button, decimal comma, and mobile layout.')
         console.log('PASS: 3-2-1 countdown, balance scoring, visible ranking, steady robot buttons, passive income animation, stable DOM/focus, replay, refresh, all modes and mobile layout.')
     } finally {
         if (browser) await browser.close()

@@ -127,17 +127,25 @@ endgameContent.addEventListener("click", (event) => {
     if (action === "cosmetic") enqueueGameAction(`/api/cosmetics/${id}/buy`)
     if (action === "collection") enqueueGameAction(`/api/collections/${id}/buy`)
     if (action === "collect-investments") enqueueGameAction("/api/investments/collect")
+    if (action === "invest-all") {
+        endgameContent.querySelector('[name="amount"]').value = gameState.userCountExact || String(gameState.userCount)
+    }
 })
 
 endgameContent.addEventListener("submit", (event) => {
     if (!event.target.matches("#investmentForm")) return
     event.preventDefault()
     const formData = new FormData(event.target)
-    const amount = Number(formData.get("amount")) || 0
     enqueueGameAction("/api/investments/create", {
-        amount,
-        risky: formData.get("risky") === "on"
+        amount: String(formData.get("amount") || "").trim(),
+        plan: formData.get("plan")
     })
+})
+
+endgameContent.addEventListener("change", (event) => {
+    if (!event.target.matches("#investmentPlan")) return
+    const plan = gameState.catalog.investmentPlans[event.target.value]
+    endgameContent.querySelector("#investmentPlanSummary").textContent = `Шанс успеха: ${plan.successChance}%. Прибыль: +${plan.profitPercent}% (возврат ${100 + plan.profitPercent}%).`
 })
 
 prestigePanel.addEventListener("click", (event) => {
@@ -159,7 +167,11 @@ function enqueueGameAction(url, body = null) {
             const state = await apiRequest(url, options)
             applyGameState(state)
             showCollectedIncome(state.autoIncome)
-            if (state.investmentPayout) alert(`Инвестиции вернули ${formatNumber(state.investmentPayout).text}`)
+            if (state.investmentResult) {
+                const result = state.investmentResult
+                alert(result.won + result.lost === 0 ? "Готовых инвестиций пока нет."
+                    : `Успешных вкладов: ${result.won}. Неудачных: ${result.lost}. Возвращено: ${formatNumber(result.payout).text}. Потеряно: ${formatNumber(result.lostAmount).text}.`)
+            } else if (Number(state.investmentPayout) > 0) alert(`Инвестиции вернули ${formatNumber(state.investmentPayout).text}`)
         })
         .catch((error) => alert(error.message))
 }
@@ -393,17 +405,25 @@ function renderCollections() {
 function renderInvestmentList() {
     return gameState.investments.map((investment) => {
         const left = Math.max(0, investment.ready_at - Math.floor(Date.now() / 1000))
-        return `<p>Вклад ${formatNumber(investment.amount).text} -> ${formatNumber(investment.payout_amount).text}, готов через ${left} сек.${investment.risky ? " Риск 50%." : ""}</p>`
+        const chance = investment.success_chance ?? (investment.risky ? 50 : 100)
+        return `<p>${investment.plan_name || "Инвестиция"}: Вклад ${formatNumber(investment.amount).text} -> ${formatNumber(investment.payout_amount).text} при успехе (${chance}%), ${left > 0 ? `готов через ${left} сек.` : "можно забрать"}</p>`
     }).join("") || "<p>Активных инвестиций нет.</p>"
 }
 
 function renderInvestments() {
+    const plans = Object.entries(gameState.catalog.investmentPlans).sort((a, b) => b[1].successChance - a[1].successChance)
     return `
         <form id="investmentForm" class="endgame-card">
             <h3>Инвестиции</h3>
-            <p>Обычная инвестиция вернет 120% через ${gameState.catalog.investmentDuration} сек. Рискованная: 50% шанс x2.</p>
-            <input name="amount" type="number" min="1" placeholder="Сумма">
-            <label class="inline-check"><input name="risky" type="checkbox"> рискованная</label>
+            <p>Срок каждого вклада — ${gameState.catalog.investmentDuration} сек. Выше прибыль — ниже шанс успеха.</p>
+            <label for="investmentAmount">Сумма</label>
+            <div class="investment-amount-row"><input id="investmentAmount" name="amount" type="text" maxlength="120" placeholder="1 Qi или 250M" autocomplete="off" required aria-describedby="investmentAmountHint">
+            <button type="button" data-action="invest-all">Всё</button></div>
+            <p id="investmentAmountHint">Можно вводить дробь: 1.5 Qi или 1,5 Qi. Обозначения: K, M, B, T, Qa, Qi, Sx, Sp, Oc, No, Dc.</p>
+            <label for="investmentPlan">Вид инвестиции</label>
+            <select id="investmentPlan" name="plan">${plans.map(([id, plan]) => `<option value="${id}" ${id === "guaranteed" ? "selected" : ""}>${plan.name}: +${plan.profitPercent}%, успех ${plan.successChance}%</option>`).join("")}</select>
+            <p id="investmentPlanSummary">Шанс успеха: 100%. Прибыль: +20% (возврат 120%).</p>
+            <p>При успехе возвращается вклад и указанная прибыль. При неудаче вклад теряется полностью. Прибыль округляется вниз до целой монеты.</p>
             <button type="submit">Вложить</button>
         </form>
         <div class="endgame-card"><div id="investmentList">${renderInvestmentList()}</div><button type="button" data-action="collect-investments">Забрать готовые</button></div>`

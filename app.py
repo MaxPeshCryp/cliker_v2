@@ -11,6 +11,7 @@ from flask import Flask, has_request_context, jsonify, request, send_from_direct
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import timed_games
+from amounts import add_db_amount, db_amount, parse_amount
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -96,6 +97,14 @@ ACHIEVEMENTS = {
     "prestige_first": {"name": "Новый цикл", "description": "Сделать престиж", "bonus": 0.03},
 }
 INVESTMENT_DURATION = 30
+INVESTMENT_PLANS = {
+    "guaranteed": {"name": "Гарантированная", "successChance": 100, "profitPercent": 20},
+    "balanced": {"name": "Сбалансированная", "successChance": 80, "profitPercent": 50},
+    "growth": {"name": "Рост", "successChance": 60, "profitPercent": 100},
+    "venture": {"name": "Венчурная", "successChance": 40, "profitPercent": 200},
+    "jackpot": {"name": "Джекпот", "successChance": 20, "profitPercent": 500},
+}
+LEGACY_INVESTMENT = {"name": "Рискованная (старый вклад)", "successChance": 50, "profitPercent": 100}
 MAINTENANCE_BASE_RATE = 0.08
 PRESTIGE_MIN_BALANCE = 1_000_000_000
 LEADERBOARD_SORTS = {
@@ -118,6 +127,7 @@ app.config.update(
 def get_db():
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
+    connection.create_function("amount_add", 2, add_db_amount, deterministic=True)
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
@@ -214,10 +224,21 @@ def init_db():
             );
             """
         )
+        # Multiple Gunicorn workers may initialize simultaneously. Serialize the
+        # column checks and migrations so they cannot both add the same column.
+        db.execute("BEGIN IMMEDIATE")
         add_column_if_missing(db, "users", "prestige_points", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "total_earned", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "total_spent", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "active_theme", "TEXT NOT NULL DEFAULT 'classic'")
+        add_column_if_missing(db, "investments", "plan_id", "TEXT")
+        add_column_if_missing(db, "investments", "success_chance", "INTEGER")
+        add_column_if_missing(db, "investments", "profit_percent", "INTEGER")
+        db.execute("""UPDATE investments SET
+                      plan_id = CASE WHEN risky THEN 'legacy_risky' ELSE 'guaranteed' END,
+                      success_chance = CASE WHEN risky THEN 50 ELSE 100 END,
+                      profit_percent = CASE WHEN risky THEN 100 ELSE 20 END
+                      WHERE success_chance IS NULL""")
         timed_games.init_db(db)
 
 def ensure_user_rows(db, user_id):
@@ -243,7 +264,13 @@ def require_user(handler):
 
 
 def get_user(db, user_id):
-    return db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if row is None:
+        return None
+    user = dict(row)
+    for key in ("balance", "click_force", "click_upgrade_cost", "prestige_points", "total_earned", "total_spent"):
+        user[key] = int(user[key])
+    return user
 
 
 def get_requested_leaderboard_sort():
@@ -255,9 +282,9 @@ def get_leaderboard(db, user_id, sort_by=None):
     """Return the podium and the signed-in player's immediate ranking context."""
     sort_by = sort_by or get_requested_leaderboard_sort()
     sort = LEADERBOARD_SORTS[sort_by]
-    players = db.execute(
-        f"SELECT id, nickname, {sort['column']} AS score FROM users ORDER BY {sort['column']} DESC, id ASC"
-    ).fetchall()
+    rows = db.execute(f"SELECT id, nickname, {sort['column']} AS score FROM users").fetchall()
+    players = sorted(({**dict(row), "score": int(row["score"])} for row in rows),
+                     key=lambda player: (-player["score"], player["id"]))
     current_index = next(index for index, player in enumerate(players) if player["id"] == user_id)
 
     def serialize(player, rank):
@@ -346,14 +373,14 @@ def spend_balance(db, user_id, amount):
     user = get_user(db, user_id)
     if user["balance"] < amount:
         return False
-    db.execute("UPDATE users SET balance = balance - ?, total_spent = total_spent + ? WHERE id = ?", (amount, amount, user_id))
+    db.execute("UPDATE users SET balance = amount_add(balance, ?), total_spent = amount_add(total_spent, ?) WHERE id = ?", (db_amount(-amount), db_amount(amount), user_id))
     return True
 
 
 def add_balance(db, user_id, amount):
     if amount <= 0:
         return
-    db.execute("UPDATE users SET balance = balance + ?, total_earned = total_earned + ? WHERE id = ?", (amount, amount, user_id))
+    db.execute("UPDATE users SET balance = amount_add(balance, ?), total_earned = amount_add(total_earned, ?) WHERE id = ?", (db_amount(amount), db_amount(amount), user_id))
 
 
 def get_base_income_per_second(db, user_id):
@@ -445,6 +472,7 @@ def serialize_catalog():
         "achievements": ACHIEVEMENTS,
         "prestigeMinBalance": PRESTIGE_MIN_BALANCE,
         "investmentDuration": INVESTMENT_DURATION,
+        "investmentPlans": INVESTMENT_PLANS,
     }
 
 
@@ -457,7 +485,7 @@ def build_state(db, user_id, auto_income=0):
     robots_income_gross = get_base_income_per_second(db, user_id)
     maintenance = get_maintenance_cost(db, user_id, robots_income_gross)
     investments = db.execute(
-        "SELECT id, amount, payout_amount, ready_at, risky, status FROM investments WHERE user_id = ? AND status = 'active' ORDER BY id DESC",
+        "SELECT id, amount, payout_amount, ready_at, risky, status, plan_id, success_chance, profit_percent FROM investments WHERE user_id = ? AND status = 'active' ORDER BY id DESC",
         (user_id,),
     ).fetchall()
     achievements = {
@@ -468,6 +496,7 @@ def build_state(db, user_id, auto_income=0):
         "userNik": user["nickname"],
         "userEmail": user["email"],
         "userCount": user["balance"],
+        "userCountExact": str(user["balance"]),
         "clickForce": get_click_power(db, user_id),
         "baseClickForce": user["click_force"],
         "forceUpgradeCost": apply_discount(user["click_upgrade_cost"], research),
@@ -486,7 +515,8 @@ def build_state(db, user_id, auto_income=0):
         "cosmetics": get_unlocked_ids(db, "user_cosmetics", "cosmetic_id", user_id),
         "collections": get_unlocked_ids(db, "user_collections", "collection_id", user_id),
         "activeTheme": user["active_theme"],
-        "investments": [dict(row) for row in investments],
+        "investments": [{**dict(row), "amount": str(int(row["amount"])), "payout_amount": str(int(row["payout_amount"])),
+                         "plan_name": INVESTMENT_PLANS.get(row["plan_id"], LEGACY_INVESTMENT)["name"]} for row in investments],
         "achievements": achievements,
         "leaderboard": get_leaderboard(db, user_id),
         "catalog": serialize_catalog(),
@@ -587,7 +617,7 @@ def click_upgrade():
         cost = apply_discount(user["click_upgrade_cost"], research)
         if not spend_balance(db, session["user_id"], cost):
             return jsonify({"error": "Не хватает кликов"}), 400
-        db.execute("UPDATE users SET click_force = click_force + 1, click_upgrade_cost = ? WHERE id = ?", (round(user["click_upgrade_cost"] * 1.5), session["user_id"]))
+        db.execute("UPDATE users SET click_force = amount_add(click_force, 1), click_upgrade_cost = ? WHERE id = ?", (db_amount(round(user["click_upgrade_cost"] * 1.5)), session["user_id"]))
         return jsonify(build_state(db, session["user_id"], auto_income))
 
 
@@ -634,7 +664,7 @@ def prestige():
         if user["balance"] < PRESTIGE_MIN_BALANCE:
             return jsonify({"error": "Для престижа нужен минимум 1B"}), 400
         gained = max(1, int(user["balance"] // PRESTIGE_MIN_BALANCE))
-        db.execute("UPDATE users SET balance = 0, click_force = 1, click_upgrade_cost = 100, prestige_points = prestige_points + ?, last_income_at = ? WHERE id = ?", (gained, int(time.time()), user_id))
+        db.execute("UPDATE users SET balance = 0, click_force = 1, click_upgrade_cost = 100, prestige_points = amount_add(prestige_points, ?), last_income_at = ? WHERE id = ?", (db_amount(gained), int(time.time()), user_id))
         db.execute("UPDATE user_robots SET level = 0 WHERE user_id = ?", (user_id,))
         db.execute("UPDATE user_boosts SET active_until = 0 WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM investments WHERE user_id = ? AND status = 'active'", (user_id,))
@@ -714,19 +744,29 @@ def buy_collection(collection_id):
 @app.post("/api/investments/create")
 @require_user
 def create_investment():
-    payload = request.get_json(silent=True) or {}
-    amount = int(payload.get("amount", 0) or 0)
-    risky = 1 if payload.get("risky") else 0
-    if amount <= 0:
-        return jsonify({"error": "Введите сумму инвестиции"}), 400
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Введите сумму и выберите вид инвестиции"}), 400
+    plan_id = payload.get("plan", "legacy_risky" if payload.get("risky") else "guaranteed")
+    plan = INVESTMENT_PLANS.get(plan_id) if isinstance(plan_id, str) else None
+    if plan_id == "legacy_risky" and "plan" not in payload:
+        plan = LEGACY_INVESTMENT
+    if plan is None:
+        return jsonify({"error": "Неизвестный вид инвестиции"}), 400
+    try:
+        amount = parse_amount(payload.get("amount"))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
     with db_connection() as db:
         user_id = session["user_id"]
         auto_income = collect_active_income(db, user_id)
         if not spend_balance(db, user_id, amount):
             return jsonify({"error": "Не хватает кликов"}), 400
-        multiplier = 2.0 if risky else 1.2
-        payout = int(amount * multiplier)
-        db.execute("INSERT INTO investments (user_id, amount, payout_amount, ready_at, risky) VALUES (?, ?, ?, ?, ?)", (user_id, amount, payout, int(time.time()) + INVESTMENT_DURATION, risky))
+        payout = amount * (100 + plan["profitPercent"]) // 100
+        db.execute("""INSERT INTO investments (user_id, amount, payout_amount, ready_at, risky, plan_id, success_chance, profit_percent)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (user_id, db_amount(amount), db_amount(payout), int(time.time()) + INVESTMENT_DURATION,
+                    int(plan["successChance"] < 100), plan_id, plan["successChance"], plan["profitPercent"]))
         return jsonify(build_state(db, user_id, auto_income))
 
 
@@ -736,16 +776,22 @@ def collect_investments():
     with db_connection() as db:
         user_id = session["user_id"]
         auto_income = collect_active_income(db, user_id)
-        rows = db.execute("SELECT id, payout_amount, risky FROM investments WHERE user_id = ? AND status = 'active' AND ready_at <= ?", (user_id, int(time.time()))).fetchall()
+        rows = db.execute("SELECT id, amount, payout_amount, success_chance FROM investments WHERE user_id = ? AND status = 'active' AND ready_at <= ?", (user_id, int(time.time()))).fetchall()
         payout_total = 0
+        won_count = 0
+        lost_amount = 0
         for row in rows:
-            won = not row["risky"] or random.random() < 0.5
+            won = row["success_chance"] == 100 or random.random() < row["success_chance"] / 100
             if won:
-                payout_total += row["payout_amount"]
+                won_count += 1
+                payout_total += int(row["payout_amount"])
+            else:
+                lost_amount += int(row["amount"])
             db.execute("UPDATE investments SET status = ? WHERE id = ?", ("collected" if won else "lost", row["id"]))
         add_balance(db, user_id, payout_total)
         state = build_state(db, user_id, auto_income)
-        state["investmentPayout"] = payout_total
+        state["investmentPayout"] = str(payout_total)
+        state["investmentResult"] = {"won": won_count, "lost": len(rows) - won_count, "lostAmount": str(lost_amount), "payout": str(payout_total)}
         return jsonify(state)
 
 
@@ -762,7 +808,7 @@ def fusion():
         if not all(levels.get(robot_id, 0) >= max_level for robot_id in base_ids):
             return jsonify({"error": "Нужны первые 3 робота на максимуме"}), 400
         db.execute("UPDATE user_robots SET level = 0 WHERE user_id = ? AND robot_id IN ('robot1', 'robot2', 'robot3')", (user_id,))
-        db.execute("UPDATE users SET prestige_points = prestige_points + 1 WHERE id = ?", (user_id,))
+        db.execute("UPDATE users SET prestige_points = amount_add(prestige_points, 1) WHERE id = ?", (user_id,))
         gold_level = levels.get("gold_robot", 0)
         if gold_level == 0:
             db.execute("UPDATE user_robots SET level = 1 WHERE user_id = ? AND robot_id = 'gold_robot'", (user_id,))
