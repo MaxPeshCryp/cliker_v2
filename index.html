@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Кликер</title>
-    <link rel="stylesheet" href="./style.css?v=15">
-    <script src="./script.js?v=15" defer> </script>
+    <link rel="stylesheet" href="./style.css?v=16">
+    <script src="./script.js?v=16" defer> </script>
     <script src="./timed-games.js?v=14" defer></script>
 </head>
 
@@ -79,6 +79,12 @@
             </div>
             <div id="timedResult" role="status" hidden>
                 <h3 id="timedResultTitle"></h3><p id="timedResultScore" class="timed-result-score"></p><p id="timedResultDetail"></p>
+                <article class="ad-offer" data-ad-card="result" hidden>
+                    <span class="ad-label">Бонус за рекламу</span>
+                    <h3>Награда за результат</h3>
+                    <p>Получите столько же монет на основной баланс. Рекорд и место в рейтинге не меняются.</p>
+                    <button type="button" data-ad-placement="result">Смотреть рекламу</button>
+                </article>
                 <button type="button" id="timedReplay" data-timed-start="60">Сыграть ещё раз с нуля</button>
             </div>
             <details class="timed-history"><summary>Последние 10 результатов</summary><div id="timedHistory"></div></details>
@@ -114,6 +120,12 @@
             <button id="clickMe"> click me </button>
         </div>
         <button id="clickForceUpgrade"> </button>
+        <article class="ad-offer" data-ad-card="balance" hidden>
+            <span class="ad-label">Бонус за рекламу</span>
+            <h3>Пополнить баланс</h3>
+            <p>Дополнительные монеты за просмотр. Доступно раз в 5 минут.</p>
+            <button type="button" data-ad-placement="balance">Смотреть рекламу</button>
+        </article>
         <section id="robots">
             <h2>Роботы</h2>
             <p id="robotsIncome"></p>
@@ -151,6 +163,22 @@
         </aside>
     </div>
 
+    <dialog id="adDialog" aria-labelledby="adDialogTitle" aria-describedby="adDialogReward">
+        <div class="ad-dialog-heading">
+            <span class="ad-label">Реклама · демо</span>
+            <button type="button" id="adClose" aria-label="Закрыть рекламу">✕</button>
+        </div>
+        <h2 id="adDialogTitle">Бонус за просмотр</h2>
+        <p id="adDialogReward"></p>
+        <div class="ad-placeholder">
+            <span class="ad-placeholder-icon" aria-hidden="true">▶</span>
+            <strong>Здесь могла быть ваша реклама</strong>
+            <span>Место для рекламного ролика</span>
+        </div>
+        <p id="adStatus" role="status" aria-live="polite"></p>
+        <button type="button" id="adClaim" disabled>Забрать бонус</button>
+        <p class="ad-footnote">Просмотр по желанию. Если закрыть окно до получения бонуса, награда не начислится.</p>
+    </dialog>
 </body>
 
 </html>

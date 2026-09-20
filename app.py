@@ -11,6 +11,7 @@ from flask import Flask, has_request_context, jsonify, request, send_from_direct
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import timed_games
+import rewarded_ads
 from amounts import add_db_amount, db_amount, parse_amount
 
 
@@ -240,6 +241,7 @@ def init_db():
                       profit_percent = CASE WHEN risky THEN 100 ELSE 20 END
                       WHERE success_chance IS NULL""")
         timed_games.init_db(db)
+        rewarded_ads.init_db(db)
 
 def ensure_user_rows(db, user_id):
     for robot_id in ROBOTS:
@@ -476,6 +478,10 @@ def serialize_catalog():
     }
 
 
+def ad_balance_reward(db, user_id):
+    return max(100, get_click_power(db, user_id) * 30, get_net_income_per_second(db, user_id) * 60)
+
+
 def build_state(db, user_id, auto_income=0):
     timed_state = timed_games.build_state(db, user_id)
     ensure_user_rows(db, user_id)
@@ -507,6 +513,7 @@ def build_state(db, user_id, auto_income=0):
         "autoIncome": auto_income,
         "timedRewardIncome": timed_state["rewardRate"],
         "timedGames": timed_state,
+        "adOffers": rewarded_ads.offers(db, user_id, ad_balance_reward(db, user_id)),
         "prestigePoints": user["prestige_points"],
         "prestigeMultiplier": prestige_multiplier(user),
         "research": research,
@@ -816,6 +823,8 @@ def fusion():
 
 
 timed_games.register_routes(app, db_connection, require_user, build_state)
+rewarded_ads.register_routes(app, db_connection, require_user, build_state,
+                            add_balance, collect_active_income, ad_balance_reward)
 init_db()
 
 

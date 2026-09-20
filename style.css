@@ -15,6 +15,28 @@
 
 [hidden] { display: none !important; }
 
+.ad-offer { margin: 16px 0; padding: 18px; border: 1px dashed #8b7951; border-radius: 16px; background: linear-gradient(120deg, #263440, #131c25); color: var(--text); text-align: left; font-family: system-ui, sans-serif; line-height: 1.5; }
+.ad-label { display: inline-block; color: var(--gold-light); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.ad-offer h3 { margin: 6px 0; font-size: 1.05rem; }
+.ad-offer p { color: var(--muted); font-size: 0.85rem; }
+.ad-offer button, #adDialog button { font-family: system-ui, sans-serif; letter-spacing: 0; font-size: 0.9rem; min-height: 44px; padding: 10px 14px; margin: 12px 0 0; box-shadow: none; }
+.ad-offer button:focus-visible, #adDialog button:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+#endgameContent .ad-offer { grid-column: 1 / -1; margin: 0; }
+body.ad-modal-open { overflow: hidden; }
+#adDialog { box-sizing: border-box; width: min(480px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 24px; overflow-y: auto; border: 1px solid #8b7951; border-radius: 22px; background: #111c27; color: var(--text); box-shadow: 0 24px 80px #0009; font-family: system-ui, sans-serif; line-height: 1.5; }
+#adDialog::backdrop { background: #050b13d9; backdrop-filter: blur(6px); }
+.ad-dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#adDialog #adClose { width: 44px; margin: 0; border: 1px solid #645b40; border-radius: 12px; background: transparent; color: var(--text); flex-shrink: 0; }
+#adDialog h2 { font-size: 1.4rem; margin: 16px 0 6px; text-align: left; }
+#adDialogReward { font-size: 0.9rem; color: var(--muted); }
+.ad-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 210px; padding: 24px; margin: 22px 0 16px; border: 1px dashed #8b7951; border-radius: 16px; text-align: center; background: radial-gradient(ellipse at top, #34464b, #18242f 75%); }
+.ad-placeholder strong { max-width: 260px; font-size: 1.45rem; line-height: 1.4; }
+.ad-placeholder > span:last-child { color: var(--muted); font-size: 0.8rem; }
+.ad-placeholder-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #ffd96622; color: var(--gold-light); }
+#adStatus { min-height: 48px; font-size: 0.9rem; }
+#adDialog .ad-footnote { margin-top: 16px; color: var(--muted); font-size: 0.75rem; }
+@media (max-width: 420px) { #adDialog { padding: 18px; } .ad-placeholder { min-height: 170px; padding: 18px; } }
+
 #investmentForm select { width: 100%; padding: 12px 8px; border: 1px solid #82703d; border-radius: 10px; background: #0b1118; color: var(--text); font: inherit; font-size: 0.8rem; }
 #investmentForm select:focus-visible { outline: 2px solid var(--gold-light); }
 .investment-amount-row { display: flex; gap: 8px; align-items: center; }

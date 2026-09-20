@@ -100,6 +100,7 @@ endgameTabs.addEventListener("click", (event) => {
     if (!button) return
     activeEndgameTab = button.dataset.endgameTab
     renderEndgame()
+    renderAdOffers()
 })
 
 leaderboardTabs.addEventListener("click", async (event) => {
@@ -219,6 +220,7 @@ function applyGameState(state) {
     renderLeaderboard()
     renderEndgame()
     window.renderTimedGames?.(state.timedGames)
+    renderAdOffers()
 }
 
 function renderLeaderboard() {
@@ -381,7 +383,11 @@ function renderResearch() {
 }
 
 function renderBoosts() {
-    return Object.entries(gameState.catalog.boosts).map(([id, item]) => {
+    const ad = gameState.adOffers ? `<article class="ad-offer" data-ad-card="boost">
+        <span class="ad-label">Бонус за рекламу</span><h3>Турбо на минуту</h3>
+        <p>Доход роботов ×2 на 60 секунд. Доступно раз в 10 минут. Продлевает активный турборежим.</p>
+        <button type="button" data-ad-placement="boost">Смотреть рекламу · ×2 доход</button></article>` : ""
+    return ad + Object.entries(gameState.catalog.boosts).map(([id, item]) => {
         const left = gameState.boosts[id] || 0
         return cardHtml(item.name, `${item.description}<br>Активно еще: ${left} сек.`, `Купить за ${formatNumber(item.cost).text}`, "boost", id, false)
     }).join("")
@@ -516,6 +522,110 @@ function createFlyingRuble() {
 buttonClickMe.addEventListener("click", () => {
     const iconsCount = Math.floor(Math.random() * 3) + 1
     for (let index = 0; index < iconsCount; index++) createFlyingRuble()
+})
+
+const adDialog = document.querySelector("#adDialog")
+const adStatus = document.querySelector("#adStatus")
+const adClaim = document.querySelector("#adClaim")
+const adClose = document.querySelector("#adClose")
+let adSession = null
+let adTimer = null
+let adRequestVersion = 0
+let adClaiming = false
+let adOpener = null
+
+function renderAdOffers() {
+    document.querySelectorAll("[data-ad-card]").forEach(card => {
+        const placement = card.dataset.adCard
+        const offer = gameState?.adOffers?.[placement]
+        card.hidden = !offer
+        if (!offer) return
+        const button = card.querySelector("[data-ad-placement]")
+        button.disabled = !offer.available || Boolean(gameState.timedGames?.active)
+        const remaining = offer.remaining || 0
+        const label = gameState.timedGames?.active ? "После завершения мини-игры"
+            : offer.claimed ? "Бонус уже получен"
+            : remaining > 0 ? `Доступно через ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`
+            : !offer.available ? "Нужен результат больше нуля"
+            : placement === "boost" ? "Смотреть рекламу · ×2 доход"
+            : `Смотреть рекламу · +${formatNumber(offer.amount).text}`
+        if (button.firstChild) button.firstChild.nodeValue = label
+        else button.textContent = label
+    })
+}
+
+document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-ad-placement]")
+    if (!button || button.disabled || adDialog.open) return
+    const placement = button.dataset.adPlacement
+    const offer = gameState?.adOffers?.[placement]
+    if (!offer?.available) return
+    const version = ++adRequestVersion
+    adOpener = button
+    adSession = null
+    adClaim.hidden = false
+    adClaim.disabled = true
+    adClaim.textContent = "Забрать бонус"
+    adStatus.textContent = "Подготавливаем просмотр…"
+    document.querySelector("#adDialogReward").textContent = placement === "boost"
+        ? "Награда: ×2 доход роботов на 60 секунд."
+        : `Награда: +${formatNumber(offer.amount).text} монет на основной баланс.`
+    adDialog.showModal()
+    document.body.classList.add("ad-modal-open")
+    try {
+        const response = await apiRequest("/api/ads/start", {
+            method: "POST", body: JSON.stringify({ placement, runId: offer.runId })
+        })
+        if (version !== adRequestVersion || !adDialog.open) return
+        adSession = { ...response, placement, deadline: performance.now() + response.waitSeconds * 1000 }
+        document.querySelector("#adDialogReward").textContent = placement === "boost"
+            ? "Награда: ×2 доход роботов на 60 секунд."
+            : `Награда: +${formatNumber(response.amount).text} монет на основной баланс.`
+        const tick = () => {
+            const left = Math.max(0, Math.ceil((adSession.deadline - performance.now()) / 1000))
+            adStatus.textContent = left ? `Бонус будет доступен через ${left} сек.` : "Просмотр завершён. Можно забрать бонус!"
+            adClaim.disabled = left > 0
+            if (!left) { clearInterval(adTimer); adTimer = null }
+        }
+        adTimer = setInterval(tick, 200)
+        tick()
+    } catch (error) {
+        if (version === adRequestVersion) adStatus.textContent = error.message
+    }
+})
+
+adClaim.addEventListener("click", async () => {
+    if (!adSession || adClaim.disabled || adClaiming) return
+    adClaiming = true
+    adClaim.disabled = true
+    adClose.disabled = true
+    adStatus.textContent = "Начисляем бонус…"
+    try {
+        const state = await apiRequest("/api/ads/claim", {
+            method: "POST", body: JSON.stringify({ token: adSession.token })
+        })
+        applyGameState(state)
+        adStatus.textContent = adSession.placement === "boost" ? "Готово! Турборежим продлён на 60 секунд."
+            : `Готово! На основной баланс добавлено ${formatNumber(adSession.amount).text} монет.`
+        adClaim.hidden = true
+    } catch (error) {
+        adStatus.textContent = `${error.message}. Можно повторить получение или закрыть окно.`
+        adClaim.disabled = false
+    } finally {
+        adClaiming = false
+        adClose.disabled = false
+    }
+})
+
+adClose.addEventListener("click", () => { if (!adClaiming) adDialog.close() })
+adDialog.addEventListener("cancel", event => { if (adClaiming) event.preventDefault() })
+adDialog.addEventListener("close", () => {
+    ++adRequestVersion
+    clearInterval(adTimer)
+    adTimer = null
+    adSession = null
+    document.body.classList.remove("ad-modal-open")
+    if (adOpener?.isConnected && !adOpener.disabled) adOpener.focus({ preventScroll: true })
 })
 
 restoreSession()
