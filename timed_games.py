@@ -3,6 +3,7 @@
 import time
 
 from flask import jsonify, request, session
+from amounts import db_amount
 
 
 MODES = {
@@ -16,6 +17,12 @@ UPGRADES = {
     "engine": {"name": "Ускорение роботов", "column": "engine_level", "base": 80, "growth": 2, "max": 8},
 }
 COUNTDOWN_MS = 3000
+REWARD_WEIGHTS = (4, 3, 2)  # / 40,000 = 0.01%, 0.0075%, 0.005% per second.
+MIN_REWARD = 1000
+
+
+def place_reward(balance, rank):
+    return max(MIN_REWARD, int(balance) * REWARD_WEIGHTS[rank - 1] // 40_000)
 
 
 def now_ms():
@@ -66,6 +73,8 @@ def init_db(db):
     """)
     if not any(row["name"] == "passive_earned" for row in db.execute("PRAGMA table_info(timed_runs)")):
         db.execute("ALTER TABLE timed_runs ADD COLUMN passive_earned INTEGER NOT NULL DEFAULT 0")
+    if not any(row["name"] == "rank" for row in db.execute("PRAGMA table_info(timed_rewards)")):
+        db.execute("ALTER TABLE timed_rewards ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
     if not db.execute("SELECT 1 FROM timed_settings WHERE key = 'balance_scoring_v1'").fetchone():
         # Preserve attempts and already-earned prizes when changing the scoring rule.
         timestamp = now_ms()
@@ -80,6 +89,27 @@ def init_db(db):
         for duration in MODES:
             update_rewards(db, duration, timestamp)
         db.execute("INSERT INTO timed_settings VALUES ('balance_scoring_v1', '1')")
+    if not proportional_rewards_enabled(db):
+        # Pay all time before migration at the saved old rates, never retroactively
+        # multiply offline income. Existing results and fractional coins survive.
+        timestamp = now_ms()
+        synchronize(db, timestamp)
+        for reward in db.execute("SELECT * FROM timed_rewards").fetchall():
+            settle_reward(db, reward, timestamp)
+        db.execute("INSERT INTO timed_settings VALUES ('balance_rewards_v1', '1')")
+        for duration in MODES:
+            update_rewards(db, duration, timestamp)
+
+
+def proportional_rewards_enabled(db):
+    return bool(db.execute("SELECT 1 FROM timed_settings WHERE key = 'balance_rewards_v1'").fetchone())
+
+
+def refresh_reward_rates(db, user_id):
+    balance = int(db.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0])
+    for reward in db.execute("SELECT duration, rank FROM timed_rewards WHERE user_id = ? AND rank > 0", (user_id,)).fetchall():
+        db.execute("UPDATE timed_rewards SET rate = ? WHERE user_id = ? AND duration = ?",
+                   (db_amount(place_reward(balance, reward["rank"])), user_id, reward["duration"]))
 
 
 def income_rate(run):
@@ -102,10 +132,10 @@ def settle_run(db, run, timestamp):
 
 def settle_reward(db, reward, timestamp):
     elapsed = max(0, timestamp - reward["settled_at"])
-    earned, remainder = divmod(elapsed * reward["rate"] + reward["remainder"], 1000)
+    earned, remainder = divmod(elapsed * int(reward["rate"]) + reward["remainder"], 1000)
     if earned:
         db.execute("UPDATE users SET balance = amount_add(balance, ?), total_earned = amount_add(total_earned, ?) WHERE id = ?",
-                   (earned, earned, reward["user_id"]))
+                   (db_amount(earned), db_amount(earned), reward["user_id"]))
     db.execute("UPDATE timed_rewards SET settled_at = ?, remainder = ? WHERE user_id = ? AND duration = ?",
                (max(timestamp, reward["settled_at"]), remainder, reward["user_id"], reward["duration"]))
 
@@ -119,11 +149,15 @@ def update_rewards(db, duration, timestamp):
     # Settle the OLD rates exactly at the ranking change, including offline users.
     for reward in db.execute("SELECT * FROM timed_rewards WHERE duration = ? AND rate > 0", (duration,)).fetchall():
         settle_reward(db, reward, timestamp)
-    db.execute("UPDATE timed_rewards SET rate = 0 WHERE duration = ?", (duration,))
+    db.execute("UPDATE timed_rewards SET rate = 0, rank = 0 WHERE duration = ?", (duration,))
+    proportional = proportional_rewards_enabled(db)
     for index, player in enumerate(podium(db, duration)):
-        db.execute("""INSERT INTO timed_rewards(user_id, duration, rate, settled_at) VALUES (?, ?, ?, ?)
-                      ON CONFLICT(user_id, duration) DO UPDATE SET rate = excluded.rate, settled_at = excluded.settled_at""",
-                   (player["user_id"], duration, MODES[duration]["rewards"][index], timestamp))
+        balance = db.execute("SELECT balance FROM users WHERE id = ?", (player["user_id"],)).fetchone()[0]
+        rate = place_reward(balance, index + 1) if proportional else MODES[duration]["rewards"][index]
+        db.execute("""INSERT INTO timed_rewards(user_id, duration, rate, settled_at, rank) VALUES (?, ?, ?, ?, ?)
+                      ON CONFLICT(user_id, duration) DO UPDATE SET rate = excluded.rate,
+                          settled_at = MAX(timed_rewards.settled_at, excluded.settled_at), rank = excluded.rank""",
+                   (player["user_id"], duration, db_amount(rate), timestamp, index + 1 if proportional else 0))
 
 
 def synchronize(db, timestamp, user_id=None):
@@ -148,7 +182,7 @@ def synchronize(db, timestamp, user_id=None):
 
 
 def reward_rate(db, user_id):
-    return db.execute("SELECT COALESCE(SUM(rate), 0) FROM timed_rewards WHERE user_id = ?", (user_id,)).fetchone()[0]
+    return sum(int(row[0]) for row in db.execute("SELECT rate FROM timed_rewards WHERE user_id = ?", (user_id,)))
 
 
 def serialize_run(run, timestamp):
@@ -168,6 +202,8 @@ def build_state(db, user_id):
     timestamp = now_ms()
     # Also handles a deadline crossed while building the main game's response.
     synchronize(db, timestamp, user_id)
+    refresh_reward_rates(db, user_id)
+    balance = int(db.execute("SELECT balance FROM users WHERE id = ?", (user_id,)).fetchone()[0])
     active = db.execute("SELECT * FROM timed_runs WHERE user_id = ? AND status = 'active'", (user_id,)).fetchone()
     if active:
         active = settle_run(db, active, timestamp)
@@ -181,7 +217,8 @@ def build_state(db, user_id):
         def player(row):
             return {"rank": row["rank"], "nickname": row["nickname"], "score": row["score"],
                     "isCurrentUser": row["user_id"] == user_id}
-        modes.append({"duration": duration, "name": mode["name"], "rewards": mode["rewards"],
+        modes.append({"duration": duration, "name": mode["name"],
+                      "rewards": [str(place_reward(balance, rank)) for rank in (1, 2, 3)],
                       "top": [player(row) for row in rows[:3]], "totalPlayers": len(rows),
                       "around": [player(row) for row in rows if current and abs(row["rank"] - current["rank"]) <= 1],
                       "current": player(current) if current else None})

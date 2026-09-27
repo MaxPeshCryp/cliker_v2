@@ -146,7 +146,7 @@ endgameContent.addEventListener("submit", (event) => {
 endgameContent.addEventListener("change", (event) => {
     if (!event.target.matches("#investmentPlan")) return
     const plan = gameState.catalog.investmentPlans[event.target.value]
-    endgameContent.querySelector("#investmentPlanSummary").textContent = `Шанс успеха: ${plan.successChance}%. Прибыль: +${plan.profitPercent}% (возврат ${100 + plan.profitPercent}%).`
+    endgameContent.querySelector("#investmentPlanSummary").textContent = investmentPlanSummary(plan)
 })
 
 prestigePanel.addEventListener("click", (event) => {
@@ -384,8 +384,11 @@ function renderResearch() {
 
 function renderBoosts() {
     const ad = gameState.adOffers ? `<article class="ad-offer" data-ad-card="boost">
-        <span class="ad-label">Бонус за рекламу</span><h3>Турбо на минуту</h3>
+        <a class="ad-image-link" href="https://it.iteacher-alex.org/" target="_blank" rel="noopener noreferrer" aria-label="ITeacher — занятия для детей (новая вкладка)"><img class="ad-illustration" src="/assets/iteacher-young-creators.png" width="1536" height="1024" loading="lazy" alt="Подростки создают на ноутбуке игровой мир с летающими островами и роботом"></a>
+        <span class="ad-label">Реклама · ITeacher</span><h3>Турбо на минуту</h3>
         <p>Доход роботов ×2 на 60 секунд. Доступно раз в 10 минут. Продлевает активный турборежим.</p>
+        <p class="ad-sponsor">Развивайте навыки с ITeacher: индивидуальные уроки по 45 минут с упором на практику.</p>
+        <a class="ad-site-link" href="https://it.iteacher-alex.org/" target="_blank" rel="noopener noreferrer">Узнать о занятиях ↗<span class="ad-link-hint"> (новая вкладка)</span></a>
         <button type="button" data-ad-placement="boost">Смотреть рекламу · ×2 доход</button></article>` : ""
     return ad + Object.entries(gameState.catalog.boosts).map(([id, item]) => {
         const left = gameState.boosts[id] || 0
@@ -416,19 +419,23 @@ function renderInvestmentList() {
     }).join("") || "<p>Активных инвестиций нет.</p>"
 }
 
+function investmentPlanSummary(plan) {
+    return `Шанс успеха: ${plan.successChance}%. Прибыль: +${plan.profitPercent}% (возврат ${100 + plan.profitPercent}%). Срок: ${plan.duration ?? gameState.catalog.investmentDuration} сек.`
+}
+
 function renderInvestments() {
     const plans = Object.entries(gameState.catalog.investmentPlans).sort((a, b) => b[1].successChance - a[1].successChance)
     return `
         <form id="investmentForm" class="endgame-card">
             <h3>Инвестиции</h3>
-            <p>Срок каждого вклада — ${gameState.catalog.investmentDuration} сек. Выше прибыль — ниже шанс успеха.</p>
+            <p>Чем рискованнее вклад, тем быстрее он завершится. Выше прибыль — ниже шанс успеха.</p>
             <label for="investmentAmount">Сумма</label>
             <div class="investment-amount-row"><input id="investmentAmount" name="amount" type="text" maxlength="120" placeholder="1 Qi или 250M" autocomplete="off" required aria-describedby="investmentAmountHint">
             <button type="button" data-action="invest-all">Всё</button></div>
             <p id="investmentAmountHint">Можно вводить дробь: 1.5 Qi или 1,5 Qi. Обозначения: K, M, B, T, Qa, Qi, Sx, Sp, Oc, No, Dc.</p>
             <label for="investmentPlan">Вид инвестиции</label>
-            <select id="investmentPlan" name="plan">${plans.map(([id, plan]) => `<option value="${id}" ${id === "guaranteed" ? "selected" : ""}>${plan.name}: +${plan.profitPercent}%, успех ${plan.successChance}%</option>`).join("")}</select>
-            <p id="investmentPlanSummary">Шанс успеха: 100%. Прибыль: +20% (возврат 120%).</p>
+            <select id="investmentPlan" name="plan">${plans.map(([id, plan]) => `<option value="${id}" ${id === "guaranteed" ? "selected" : ""}>${plan.name}: +${plan.profitPercent}%, успех ${plan.successChance}%, ${plan.duration ?? gameState.catalog.investmentDuration} сек.</option>`).join("")}</select>
+            <p id="investmentPlanSummary">${investmentPlanSummary(gameState.catalog.investmentPlans.guaranteed)}</p>
             <p>При успехе возвращается вклад и указанная прибыль. При неудаче вклад теряется полностью. Прибыль округляется вниз до целой монеты.</p>
             <button type="submit">Вложить</button>
         </form>

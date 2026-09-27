@@ -91,7 +91,7 @@
             text(refs.title, `${mode.duration / 60} мин`)
             text(refs.name, mode.name)
             text(refs.best, mode.current ? exact(mode.current.score) : "—")
-            text(refs.prizes, `🥇 ${mode.rewards[0]} · 🥈 ${mode.rewards[1]} · 🥉 ${mode.rewards[2]} /сек`)
+            text(refs.prizes, `🥇 ${formatNumber(mode.rewards[0]).text} · 🥈 ${formatNumber(mode.rewards[1]).text} · 🥉 ${formatNumber(mode.rewards[2]).text} /сек`)
             const active = state.active?.duration === mode.duration
             text(refs.button, active ? "Вернуться" : "Играть")
             property(refs.button, "disabled", (busy && !state.active) || Boolean(state.active && !active))
@@ -172,7 +172,7 @@
             clearInterval(countdownTimer)
             countdownTimer = null
         }
-        text(find("timedReward"), `Доход за места: +${exact(next.rewardRate)}/сек`)
+        text(find("timedReward"), `Доход за места: +${formatNumber(next.rewardRate).text}/сек`)
         renderModes()
         renderRun()
         if (autoIncome > 0 && dialog.open && document.visibilityState === "visible") {

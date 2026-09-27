@@ -130,8 +130,8 @@ class TimedGamesTests(unittest.TestCase):
         state = self.action(run).get_json()
         self.assertIsNone(state["timedGames"]["active"])
         self.assertEqual(state["timedGames"]["history"][0]["score"], 120)
-        self.assertEqual(state["userCount"], 60)  # 20 seconds in first place, at 3/sec.
-        self.assertEqual(self.action(run).get_json()["userCount"], 60)
+        self.assertEqual(state["userCount"], 20_000)  # 20 seconds in first place, at the 1,000/sec minimum.
+        self.assertEqual(self.action(run).get_json()["userCount"], 20_000)
         self.assertEqual(len(self.state()["timedGames"]["history"]), 1)
 
     def test_actions_cannot_access_another_player_or_malformed_upgrade(self):
@@ -173,13 +173,13 @@ class TimedGamesTests(unittest.TestCase):
         self.clock += 120_000
         state = self.state()
         self.assertEqual(self.clock - initial_time, 120_000)
-        self.assertEqual(state["userCount"], 189)  # 3-second countdown + 60 seconds until rivals finish.
+        self.assertEqual(state["userCount"], 63_000)  # 3-second countdown + 60 seconds until rivals finish.
         self.assertEqual(state["timedRewardIncome"], 0)
         self.assertEqual(state["timedGames"]["modes"][0]["current"]["rank"], 4)
-        self.assertEqual(self.state(rivals[2])["userCount"], 171)
+        self.assertEqual(self.state(rivals[2])["userCount"], 57_000)
         self.clock += 10_000
-        self.assertEqual(self.state()["userCount"], 189)
-        self.assertEqual(self.state(rivals[2])["userCount"], 201)
+        self.assertEqual(self.state()["userCount"], 63_000)
+        self.assertEqual(self.state(rivals[2])["userCount"], 67_000)
 
     def test_countdown_is_server_enforced_and_does_not_shorten_the_run(self):
         run = self.start()
@@ -241,10 +241,10 @@ class TimedGamesTests(unittest.TestCase):
             self.finish(self.start(duration), 1)
         state = self.state()
         baseline = state["userCount"]
-        self.assertEqual(state["timedRewardIncome"], 27)
+        self.assertEqual(state["timedRewardIncome"], 3000)
         self.clock += 10_000
-        self.assertEqual(self.state()["userCount"], baseline + 270)
-        self.assertEqual(self.state()["userCount"], baseline + 270)
+        self.assertEqual(self.state()["userCount"], baseline + 30_000)
+        self.assertEqual(self.state()["userCount"], baseline + 30_000)
         with clicker.db_connection() as db:
             user = db.execute("SELECT * FROM users WHERE id = 1").fetchone()
             self.assertEqual(user["balance"], user["total_earned"])
@@ -254,7 +254,60 @@ class TimedGamesTests(unittest.TestCase):
         for _ in range(10):
             self.clock += 100
             state = self.state()
-        self.assertEqual(state["userCount"], 3)
+        self.assertEqual(state["userCount"], 1000)
+
+    def test_percentage_rates_for_each_place_use_own_balance(self):
+        rivals = [self.client, self.player("Second"), self.player("Third")]
+        with clicker.db_connection() as db:
+            db.execute("UPDATE users SET balance = 100000000")
+        runs = [self.start(client=client) for client in rivals]
+        for index, run in enumerate(runs):
+            self.seed_run(run, balance=30 - index)
+        self.clock = runs[0]["endsAt"]
+        for client, rate in zip(rivals, (10_000, 7500, 5000)):
+            state = self.state(client)
+            self.assertEqual(state["timedRewardIncome"], rate)
+            self.assertEqual(state["timedGames"]["modes"][0]["rewards"], ["10000", "7500", "5000"])
+
+    def test_balance_changes_reprice_future_income_without_retroactive_credit(self):
+        self.finish(self.start(), 10)
+        with clicker.db_connection() as db:
+            db.execute("UPDATE users SET balance = 100000000 WHERE id = 1")
+        self.assertEqual(self.state()["timedRewardIncome"], 10_000)
+        self.clock += 10_000
+        state = self.state()
+        self.assertEqual(state["userCount"], 100_100_000)
+        self.assertEqual(state["timedRewardIncome"], 10_010)
+        self.assertEqual(self.state()["userCount"], state["userCount"])
+        spent = self.client.post("/api/investments/create", json={"amount": "100M", "plan": "guaranteed"}).get_json()
+        self.assertEqual(spent["timedRewardIncome"], 1000)
+        self.clock += 1000
+        self.assertEqual(self.state()["userCount"], 101_000)
+
+    def test_large_percentage_income_and_multi_mode_sum_stay_exact(self):
+        for duration in timed.MODES:
+            self.finish(self.start(duration), 1)
+        amount = 10 ** 33 + 123456789
+        with clicker.db_connection() as db:
+            db.execute("UPDATE users SET balance = ? WHERE id = 1", (clicker.db_amount(amount),))
+        rate = amount // 10_000
+        self.assertEqual(self.state()["timedRewardIncome"], rate * 3)
+        self.clock += 1000
+        self.assertEqual(self.state()["userCountExact"], str(amount + rate * 3))
+
+    def test_old_reward_migration_pays_old_rate_then_switches_once(self):
+        self.finish(self.start(), 10)
+        with clicker.db_connection() as db:
+            db.execute("DELETE FROM timed_settings WHERE key = 'balance_rewards_v1'")
+            db.execute("UPDATE timed_rewards SET rate = 3, rank = 0, settled_at = ?", (self.clock,))
+        self.clock += 10_000
+        clicker.init_db()
+        clicker.init_db()
+        state = self.state()
+        self.assertEqual(state["userCount"], 30)
+        self.assertEqual(state["timedRewardIncome"], 1000)
+        self.clock += 1000
+        self.assertEqual(self.state()["userCount"], 1030)
 
     def test_migration_is_repeatable_and_keeps_runs(self):
         run = self.start()

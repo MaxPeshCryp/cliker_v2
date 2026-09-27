@@ -130,6 +130,35 @@ class InvestmentTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/investments/create", json=[]).status_code, 400)
         self.assertEqual(self.client.get("/api/state").get_json()["userCountExact"], str(20 * 10 ** 18))
 
+    def test_riskier_plans_finish_sooner_and_not_before_deadline(self):
+        durations = []
+        for plan_id, plan in clicker.INVESTMENT_PLANS.items():
+            self.fund(100)
+            # Client cannot shorten the server-defined term.
+            response = self.client.post("/api/investments/create", json={"amount": "100", "plan": plan_id, "duration": 0})
+            contract = response.get_json()["investments"][0]
+            duration = contract["ready_at"] - self.clock
+            durations.append(duration)
+            self.assertEqual(duration, plan["duration"])
+            self.clock += duration - 1
+            self.assertEqual(self.collect()["investmentResult"]["won"], 0)
+            self.clock += 1
+            with patch.object(clicker.random, "random", return_value=0):
+                self.assertEqual(self.collect()["investmentResult"]["won"], 1)
+            self.assertEqual(self.collect()["investmentPayout"], "0")
+        self.assertEqual(durations, [30, 25, 20, 10, 5])
+
+    def test_existing_contract_keeps_original_deadline_after_restart(self):
+        self.fund(100)
+        contract = self.create("100", "jackpot")["investments"][0]
+        with clicker.db_connection() as db:
+            db.execute("UPDATE investments SET ready_at = ? WHERE id = ?", (self.clock + 30, contract["id"]))
+        clicker.init_db()
+        self.clock += 5
+        self.assertEqual(self.collect()["investmentResult"]["won"], 0)
+        state = self.client.get("/api/state").get_json()
+        self.assertEqual(state["investments"][0]["ready_at"], self.clock + 25)
+
     def test_insufficient_funds_does_not_insert_a_contract(self):
         self.fund(10 ** 18)
         response = self.client.post("/api/investments/create", json={"amount": "2Qi"})

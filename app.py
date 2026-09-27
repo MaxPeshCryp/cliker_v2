@@ -99,11 +99,11 @@ ACHIEVEMENTS = {
 }
 INVESTMENT_DURATION = 30
 INVESTMENT_PLANS = {
-    "guaranteed": {"name": "Гарантированная", "successChance": 100, "profitPercent": 20},
-    "balanced": {"name": "Сбалансированная", "successChance": 80, "profitPercent": 50},
-    "growth": {"name": "Рост", "successChance": 60, "profitPercent": 100},
-    "venture": {"name": "Венчурная", "successChance": 40, "profitPercent": 200},
-    "jackpot": {"name": "Джекпот", "successChance": 20, "profitPercent": 500},
+    "guaranteed": {"name": "Гарантированная", "successChance": 100, "profitPercent": 20, "duration": 30},
+    "balanced": {"name": "Сбалансированная", "successChance": 80, "profitPercent": 50, "duration": 25},
+    "growth": {"name": "Рост", "successChance": 60, "profitPercent": 100, "duration": 20},
+    "venture": {"name": "Венчурная", "successChance": 40, "profitPercent": 200, "duration": 10},
+    "jackpot": {"name": "Джекпот", "successChance": 20, "profitPercent": 500, "duration": 5},
 }
 LEGACY_INVESTMENT = {"name": "Рискованная (старый вклад)", "successChance": 50, "profitPercent": 100}
 MAINTENANCE_BASE_RATE = 0.08
@@ -550,6 +550,11 @@ def timed_script():
     return send_from_directory(BASE_DIR, "timed-games.js")
 
 
+@app.get("/assets/iteacher-young-creators.png")
+def ad_illustration():
+    return send_from_directory(BASE_DIR / "assets", "iteacher-young-creators.png")
+
+
 @app.post("/api/register")
 def register():
     payload = request.get_json(silent=True) or {}
@@ -772,7 +777,7 @@ def create_investment():
         payout = amount * (100 + plan["profitPercent"]) // 100
         db.execute("""INSERT INTO investments (user_id, amount, payout_amount, ready_at, risky, plan_id, success_chance, profit_percent)
                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                   (user_id, db_amount(amount), db_amount(payout), int(time.time()) + INVESTMENT_DURATION,
+                   (user_id, db_amount(amount), db_amount(payout), int(time.time()) + plan.get("duration", INVESTMENT_DURATION),
                     int(plan["successChance"] < 100), plan_id, plan["successChance"], plan["profitPercent"]))
         return jsonify(build_state(db, user_id, auto_income))
 
