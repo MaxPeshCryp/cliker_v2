@@ -256,6 +256,37 @@ class TimedGamesTests(unittest.TestCase):
             state = self.state()
         self.assertEqual(state["userCount"], 1000)
 
+    def test_collect_income_pays_ranking_and_reports_actual_credit_separately(self):
+        self.finish(self.start(), 10)
+        self.clock += 1000
+        state = self.client.post("/api/collect-income").get_json()
+        self.assertEqual(state["userCount"], 1000)
+        self.assertEqual(state["autoIncome"], 0)  # No robots: all coins came from the podium.
+        self.assertEqual(state["timedGames"]["rewardEarnedExact"], "1000")
+        repeated = self.client.post("/api/collect-income").get_json()
+        self.assertEqual(repeated["userCount"], 1000)
+        self.assertEqual(repeated["timedGames"]["rewardEarnedExact"], "1000")
+        self.clock += 2000
+        state = self.client.post("/api/collect-income").get_json()
+        self.assertEqual(state["userCount"], 3000)
+        self.assertEqual(state["timedGames"]["rewardEarnedExact"], "3000")
+        # Restarting migrations must not reset the counter or replay an old credit.
+        clicker.init_db()
+        self.assertEqual(self.state()["timedGames"]["rewardEarnedExact"], "3000")
+
+    def test_reward_counter_includes_credits_settled_by_another_player(self):
+        self.finish(self.start(), 10)
+        rival = self.player("RewardRival")
+        run = self.start(client=rival)
+        self.finish(run, 20, rival)
+        # Rival's request has already settled our reward at the ranking change.
+        with clicker.db_connection() as db:
+            reward = db.execute("SELECT earned_total FROM timed_rewards WHERE user_id = 1").fetchone()
+            self.assertEqual(int(reward[0]), 63_000)
+        state = self.state()
+        self.assertEqual(state["userCount"], 63_000)
+        self.assertEqual(state["timedGames"]["rewardEarnedExact"], "63000")
+
     def test_percentage_rates_for_each_place_use_own_balance(self):
         rivals = [self.client, self.player("Second"), self.player("Third")]
         with clicker.db_connection() as db:
@@ -291,9 +322,12 @@ class TimedGamesTests(unittest.TestCase):
         with clicker.db_connection() as db:
             db.execute("UPDATE users SET balance = ? WHERE id = 1", (clicker.db_amount(amount),))
         rate = amount // 10_000
-        self.assertEqual(self.state()["timedRewardIncome"], rate * 3)
+        baseline = self.state()
+        self.assertEqual(baseline["timedRewardIncome"], rate * 3)
         self.clock += 1000
-        self.assertEqual(self.state()["userCountExact"], str(amount + rate * 3))
+        paid = self.state()
+        self.assertEqual(paid["userCountExact"], str(amount + rate * 3))
+        self.assertEqual(int(paid["timedGames"]["rewardEarnedExact"]) - int(baseline["timedGames"]["rewardEarnedExact"]), rate * 3)
 
     def test_old_reward_migration_pays_old_rate_then_switches_once(self):
         self.finish(self.start(), 10)

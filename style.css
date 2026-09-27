@@ -477,6 +477,7 @@ span.change-link:hover {
 }
 
 #countBox {
+    position: relative;
     width: 100%;
     min-height: 86px;
     margin-top: 0;
@@ -820,6 +821,23 @@ span.change-link:hover {
     font-size: 0.78rem;
     box-shadow: 0 6px 0 var(--gold-dark), 0 8px 16px rgba(0, 0, 0, 0.28);
 }
+
+.ranking-income-pop {
+    display: inline-block;
+    opacity: 0;
+    pointer-events: none;
+    padding: 4px 10px;
+    border: 1px solid #d3ad53;
+    border-radius: 10px;
+    background: #292211;
+    color: #ffe49b;
+    font: 700 0.78rem/1.4 system-ui, sans-serif;
+    text-shadow: none;
+    box-shadow: 0 4px 14px #0005;
+}
+#rankingIncomePop { position: absolute; bottom: -10px; right: 14px; max-width: calc(100% - 28px); z-index: 2; }
+.ranking-income-slot { min-height: 30px; margin-top: 5px; }
+#timedRankingIncomePop { max-width: 100%; }
 
 .auto-income-pop {
     position: fixed;

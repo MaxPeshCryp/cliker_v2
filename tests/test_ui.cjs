@@ -63,6 +63,26 @@ const path = require('node:path')
             await window.incomeTick()
             check(document.querySelector('#investmentList').textContent.includes('Активных инвестиций нет'), 'Investment not removed')
             check(document.querySelector('[data-robot-id="r"]').disabled, 'Robot upgrade stale')
+            // Large cumulative totals retain tiny credits; duplicate/stale replies do not replay them.
+            const animate = Element.prototype.animate
+            const rankingPops = []
+            Element.prototype.animate = function (...args) {
+                if (this.classList.contains('ranking-income-pop')) rankingPops.push({id: this.id, text: this.textContent})
+                return animate.apply(this, args)
+            }
+            const earned = 10n ** 33n
+            showRankingIncome(earned.toString())
+            check(rankingPops.length === 0, 'Historical income animated on first state')
+            showRankingIncome((earned + 1n).toString())
+            check(rankingPops.length === 1 && rankingPops[0].text.includes('+1 · за рейтинг'), 'Small ranking credit lost')
+            showRankingIncome((earned + 1n).toString())
+            showRankingIncome(earned.toString())
+            check(rankingPops.length === 1, 'Duplicate or stale response replayed ranking reward')
+            document.querySelector('#timedDialog').showModal()
+            showRankingIncome((earned + 1001n).toString())
+            check(rankingPops[1].id === 'timedRankingIncomePop' && rankingPops[1].text.includes('+1K · за рейтинг → основной баланс'), 'Ranking credit missing in mini-game dialog')
+            document.querySelector('#timedDialog').close()
+            Element.prototype.animate = animate
             return 'PASS: all six tabs preserve DOM and focus across income ticks; timers, rating, prestige, robots and investments update.'
         })
         console.log(result)

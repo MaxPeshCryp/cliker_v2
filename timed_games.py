@@ -75,6 +75,8 @@ def init_db(db):
         db.execute("ALTER TABLE timed_runs ADD COLUMN passive_earned INTEGER NOT NULL DEFAULT 0")
     if not any(row["name"] == "rank" for row in db.execute("PRAGMA table_info(timed_rewards)")):
         db.execute("ALTER TABLE timed_rewards ADD COLUMN rank INTEGER NOT NULL DEFAULT 0")
+    if not any(row["name"] == "earned_total" for row in db.execute("PRAGMA table_info(timed_rewards)")):
+        db.execute("ALTER TABLE timed_rewards ADD COLUMN earned_total INTEGER NOT NULL DEFAULT 0")
     if not db.execute("SELECT 1 FROM timed_settings WHERE key = 'balance_scoring_v1'").fetchone():
         # Preserve attempts and already-earned prizes when changing the scoring rule.
         timestamp = now_ms()
@@ -136,8 +138,9 @@ def settle_reward(db, reward, timestamp):
     if earned:
         db.execute("UPDATE users SET balance = amount_add(balance, ?), total_earned = amount_add(total_earned, ?) WHERE id = ?",
                    (db_amount(earned), db_amount(earned), reward["user_id"]))
-    db.execute("UPDATE timed_rewards SET settled_at = ?, remainder = ? WHERE user_id = ? AND duration = ?",
-               (max(timestamp, reward["settled_at"]), remainder, reward["user_id"], reward["duration"]))
+    db.execute("""UPDATE timed_rewards SET settled_at = ?, remainder = ?,
+                  earned_total = amount_add(earned_total, ?) WHERE user_id = ? AND duration = ?""",
+               (max(timestamp, reward["settled_at"]), remainder, db_amount(earned), reward["user_id"], reward["duration"]))
 
 
 def podium(db, duration):
@@ -226,6 +229,8 @@ def build_state(db, user_id):
                          (user_id,)).fetchall()
     return {"serverNow": timestamp, "active": serialize_run(active, timestamp) if active else None,
             "modes": modes, "rewardRate": reward_rate(db, user_id),
+            "rewardEarnedExact": str(sum(int(row[0]) for row in db.execute(
+                "SELECT earned_total FROM timed_rewards WHERE user_id = ?", (user_id,)))),
             "history": [serialize_run(run, timestamp) for run in history]}
 
 

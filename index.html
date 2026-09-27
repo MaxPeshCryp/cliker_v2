@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Кликер</title>
-    <link rel="stylesheet" href="./style.css?v=18">
-    <script src="./script.js?v=18" defer> </script>
+    <link rel="stylesheet" href="./style.css?v=19">
+    <script src="./script.js?v=19" defer> </script>
     <script src="./timed-games.js?v=18" defer></script>
 </head>
 
@@ -59,6 +59,7 @@
                 <h2 id="timedDialogTitle">Игры на время</h2>
                 <button type="button" id="timedClose" aria-label="Закрыть мини-игру">✕</button>
             </div>
+            <div class="ranking-income-slot"><span id="timedRankingIncomePop" class="ranking-income-pop" aria-hidden="true">🏆 Доход за рейтинг → основной баланс</span></div>
             <p id="timedError" role="alert" hidden></p>
             <div class="timed-dialog-content"><div class="timed-play-column">
             <div id="timedArena" hidden>
@@ -120,6 +121,7 @@
         <div id="stickyControls">
             <p id="countBox">
                 <span id="userCount"></span>
+                <span id="rankingIncomePop" class="ranking-income-pop" aria-hidden="true">🏆 Доход за рейтинг</span>
             </p>
             <button id="clickMe"> click me </button>
         </div>

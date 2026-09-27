@@ -32,6 +32,8 @@ let incomeTimer = null
 let actionQueue = Promise.resolve()
 let activeEndgameTab = "research"
 let activeLeaderboardSort = "total_earned"
+let lastRankingIncomeTotal = null
+const rankingIncomeAnimations = new Map()
 
 changeLogin.onclick = function () {
     formRegister.style.display = "none"
@@ -196,6 +198,7 @@ async function restoreSession() {
 }
 
 function openGame(state) {
+    lastRankingIncomeTotal = null
     formRegister.style.display = "none"
     formLogin.style.display = "none"
     gameLayout.style.display = "grid"
@@ -221,6 +224,7 @@ function applyGameState(state) {
     renderEndgame()
     window.renderTimedGames?.(state.timedGames)
     renderAdOffers()
+    showRankingIncome(state.timedGames?.rewardEarnedExact)
 }
 
 function renderLeaderboard() {
@@ -464,6 +468,30 @@ function startIncomeCollection() {
             console.error(error)
         }
     }, 1000)
+}
+
+function showRankingIncome(totalExact) {
+    if (totalExact == null) return
+    const total = BigInt(totalExact)
+    const income = lastRankingIncomeTotal === null ? 0n : total - lastRankingIncomeTotal
+    // A cumulative server counter captures income settled by other requests too.
+    // Repeated or out-of-order replies never replay the same reward animation.
+    if (lastRankingIncomeTotal === null || total > lastRankingIncomeTotal) lastRankingIncomeTotal = total
+    if (income <= 0n || document.visibilityState !== "visible") return
+    const inMiniGame = document.querySelector("#timedDialog").open
+    const target = document.querySelector(inMiniGame ? "#timedRankingIncomePop" : "#rankingIncomePop")
+    if (!target) return
+    const label = `🏆 +${formatNumber(income.toString()).text} · за рейтинг${inMiniGame ? " → основной баланс" : ""}`
+    if (target.firstChild) target.firstChild.nodeValue = label
+    else target.textContent = label
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    rankingIncomeAnimations.get(target)?.cancel()
+    rankingIncomeAnimations.set(target, target.animate([
+        { opacity: 0, transform: reducedMotion ? "none" : "translateY(6px)" },
+        { opacity: 1, transform: "translateY(0)", offset: 0.15 },
+        { opacity: 1, transform: "translateY(0)", offset: 0.75 },
+        { opacity: 0, transform: reducedMotion ? "none" : "translateY(-8px)" }
+    ], { duration: 950, easing: "ease-out" }))
 }
 
 function showCollectedIncome(income) {
