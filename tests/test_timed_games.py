@@ -59,6 +59,15 @@ class TimedGamesTests(unittest.TestCase):
         self.clock = run["endsAt"]
         return self.state(client)["timedGames"]
 
+    def test_verified_badge_is_in_timed_ranking(self):
+        from progression import REWARDS
+        with clicker.db_connection() as db:
+            db.execute("UPDATE users SET is_verified = 1, total_earned = ? WHERE nickname = 'Player'", (int(REWARDS[0]["requiredEarnedExact"]),))
+        run = self.start()
+        state = self.finish(run, 10)
+        self.assertTrue(state["modes"][0]["top"][0]["isVerified"])
+        self.assertEqual(state["modes"][0]["top"][0]["progression"]["badge"]["id"], "spark")
+
     def test_start_requires_login_and_valid_duration(self):
         anonymous = clicker.app.test_client()
         self.assertEqual(anonymous.post("/api/timed/start", json={"duration": 60}).status_code, 401)

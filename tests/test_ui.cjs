@@ -17,9 +17,9 @@ const path = require('node:path')
         const result = await page.evaluate(async () => {
             const check = (condition, message) => { if (!condition) throw new Error(message) }
             const item = {name: 'Test', description: 'Description', baseCost: 10, maxLevel: 5, cost: 10, bonus: 0.1}
-            const player = {rank: 1, nickname: '<Test>', score: 100, isCurrentUser: true}
+            const player = {rank: 1, nickname: '<Test>', score: 100, isCurrentUser: true, isVerified: true}
             const state = {
-                userNik: 'Tester', userCount: 100, clickForce: 1, baseClickForce: 1,
+                userNik: 'Tester', isVerified: true, userCount: 100, clickForce: 1, baseClickForce: 1,
                 forceUpgradeCost: 10, activeTheme: 'classic', robotsIncome: 1,
                 maintenanceCost: 0, robotMaxLevel: 2, prestigePoints: 0, prestigeMultiplier: 1,
                 robots: {r: {level: 1}}, research: {}, boosts: {b: 20}, cosmetics: {},
@@ -31,6 +31,9 @@ const path = require('node:path')
                 leaderboard: {sortBy: 'total_earned', label: 'Score', top: [player], around: [player], currentRank: 1, totalPlayers: 1}
             }
             openGame(structuredClone(state))
+            check(document.querySelector('#welcomeName .verified-badge'), 'Profile verification badge missing')
+            check(document.querySelector('#leaderboardTop .verified-badge'), 'Ranking verification badge missing')
+            check(!createLeaderboardRow({...player, isVerified:false}).querySelector('.verified-badge'), 'Badge shown on an unverified player')
             window.fetch = async () => ({ok: true, json: async () => structuredClone(state)})
             const selectors = '#robotsList *, #prestigePanel *, #leaderboardTop *, #leaderboardAround *, #endgameContent *'
             for (const tab of ['research', 'boosts', 'cosmetics', 'collections', 'achievements', 'investments']) {

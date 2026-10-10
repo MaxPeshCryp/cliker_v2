@@ -5,13 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Кликер</title>
-    <link rel="stylesheet" href="./style.css?v=19">
-    <script src="./script.js?v=19" defer> </script>
+    <meta name="theme-color" content="#101522">
+    <link rel="stylesheet" href="./style.css?v=24">
+    <script src="./script.js?v=24" defer> </script>
     <script src="./timed-games.js?v=18" defer></script>
 </head>
 
 <body>
-    <h1>Кликер</h1>
+    <header class="app-header">
+        <a class="brand" href="/" aria-label="Кликер — главная"><span class="brand-icon" aria-hidden="true">✦</span><span>Кликер<small>МАЛЕНЬКИЙ КЛИК. БОЛЬШИЕ ВОЗМОЖНОСТИ.</small></span></a>
+        <span class="header-tag">Твоя империя начинается здесь</span>
+    </header>
     <form id="form-register">
         <h2>Регистрация</h2>
         <label for="nik-register">Придумайте ник нейм </label>
@@ -48,6 +52,20 @@
     </form>
 
     <div id="gameLayout">
+        <section class="player-toolbar" aria-label="Профиль игрока">
+            <button type="button" id="editAvatar" class="profile-avatar" aria-label="Создать свою аватарку"></button>
+            <div class="player-welcome"><span class="eyebrow">РАДЫ ВИДЕТЬ ТЕБЯ</span><h1 id="welcomeName">Игрок</h1><p>Кликай. Создавай. Становись первым.</p></div>
+            <button type="button" id="openAppearance" class="quiet-button">◈ <span>Оформление</span></button>
+            <button type="button" id="logoutButton" class="quiet-button">Выйти из аккаунта</button>
+        </section>
+        <section id="playerProgression" aria-labelledby="progressionTitle">
+            <div class="progression-overview">
+                <div id="levelEmblem" class="level-emblem" aria-hidden="true"><span>УРОВЕНЬ</span><strong id="accountLevel">1</strong></div>
+                <div class="progression-main"><span class="eyebrow">ПУТЬ СОЗДАТЕЛЯ</span><div class="progression-title"><h2 id="progressionTitle">Каждая монета — новый шаг</h2><span id="equippedLevelBadge"></span></div><p id="levelProgressText"></p><progress id="levelProgress" max="100" value="0" aria-label="Прогресс уровня аккаунта"></progress><div class="progression-stats"><span id="levelEarned"></span><span id="nextLevelLabel"></span></div></div>
+            </div>
+            <p id="levelUpNotice" role="status" aria-live="polite" hidden></p>
+            <details id="levelRewards"><summary><span>Коллекция бейджей <span id="badgeCount">0 / 7</span></span><span id="nextBadgeHint"></span></summary><p class="progression-help">Уровень растёт от всех монет, учтённых в «Всего заработано»: кликов, роботов и других начислений на основной счёт. Покупки и престиж не отнимают уровень. Заработок в отдельном забеге не считается, пока не поступит на основной счёт. Бейджи выдаются автоматически; самый высокий виден всем в рейтингах.</p><div id="levelRewardTrack"></div></details>
+        </section>
         <section id="timedGames" aria-labelledby="timedGamesTitle">
             <div class="timed-heading">
                 <div><p class="timed-eyebrow">КАЖДЫЙ РАЗ С НУЛЯ</p><h2 id="timedGamesTitle">Игры на время</h2></div>
@@ -111,19 +129,20 @@
         <div id="game">
             <div id="gameData">
             <p>
-                имя: <span id="name"></span>
+                Игрок <span id="name"></span>
             </p>
             <p>
-                сила клика: <span id="clickForce"></span>
+                За клик <span id="clickForce"></span>
             </p>
 
         </div>
         <div id="stickyControls">
+            <span class="eyebrow balance-label">ТВОЙ БАЛАНС</span>
             <p id="countBox">
                 <span id="userCount"></span>
                 <span id="rankingIncomePop" class="ranking-income-pop" aria-hidden="true">🏆 Доход за рейтинг</span>
             </p>
-            <button id="clickMe"> click me </button>
+            <button id="clickMe"><span class="click-symbol" aria-hidden="true">✦</span><span>Клик!</span><small>Каждое нажатие — шаг вперёд</small></button>
         </div>
         <button id="clickForceUpgrade"> </button>
         <article class="ad-offer" data-ad-card="balance" hidden>
@@ -136,12 +155,12 @@
             <button type="button" data-ad-placement="balance">Смотреть рекламу</button>
         </article>
         <section id="robots">
-            <h2>Роботы</h2>
+            <h2>Твоя команда роботов <span class="section-icon" aria-hidden="true">⚙</span></h2>
             <p id="robotsIncome"></p>
             <div id="robotsList"></div>
         </section>
             <section id="endgame">
-            <h2>Эндгейм</h2>
+            <h2>Следующий уровень <span class="section-icon" aria-hidden="true">↗</span></h2>
             <div id="prestigePanel" class="endgame-panel"></div>
             <div class="endgame-tabs">
                 <button type="button" data-endgame-tab="research">Исследования</button>
@@ -171,6 +190,19 @@
             <div id="leaderboardAround" class="leaderboard-list"></div>
         </aside>
     </div>
+
+    <dialog id="appearanceDialog" aria-labelledby="appearanceTitle">
+        <div class="appearance-heading"><div><span class="eyebrow">ТВОЯ ИГРА · ТВОЙ СТИЛЬ</span><h2 id="appearanceTitle">Оформление</h2></div><button type="button" id="closeAppearance" class="quiet-button" aria-label="Закрыть оформление">✕</button></div>
+        <div class="appearance-tabs" role="group" aria-label="Раздел оформления"><button type="button" data-appearance-tab="themes" aria-pressed="true">Темы игры</button><button type="button" data-appearance-tab="avatar" aria-pressed="false">Моя аватарка</button></div>
+        <section id="themeEditor" aria-label="Темы игры"><p class="appearance-help">Купи тему за игровые монеты — она останется твоей. Переключение купленных тем бесплатно.</p><p id="themeBalance" class="appearance-help"></p><div id="themeChoices"></div></section>
+        <section id="avatarEditor" aria-label="Конструктор аватарки" hidden>
+            <div class="avatar-stage"><div id="avatarPreview"></div><div><h3>Персонаж с твоим характером</h3><p>Собери его из деталей. Аватарку увидят другие игроки в рейтингах.</p><button type="button" id="randomAvatar" class="quiet-button">⤨ Случайный образ</button></div></div>
+            <div class="avatar-upload"><div class="avatar-upload-actions"><button type="button" id="uploadAvatar" class="quiet-button">↑ Загрузить свою картинку</button><button type="button" id="buildAvatar" class="quiet-button" hidden>Собрать персонажа</button></div><input type="file" id="avatarFile" accept="image/jpeg,image/png,image/webp" hidden><p class="appearance-help">JPG, PNG или WebP до 5 МБ и 20 мегапикселей. Обрезка по центру до квадрата. После выбора нажми «Сохранить аватарку».</p></div>
+            <div id="avatarChoices"></div>
+            <div class="avatar-actions"><button type="button" id="resetAvatar" class="quiet-button">Отменить изменения</button><button type="button" id="saveAvatar">Сохранить аватарку</button></div>
+        </section>
+        <p id="appearanceStatus" role="status" aria-live="polite"></p>
+    </dialog>
 
     <dialog id="adDialog" aria-labelledby="adDialogTitle" aria-describedby="adDialogReward">
         <div class="ad-dialog-heading">

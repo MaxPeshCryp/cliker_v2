@@ -2,5 +2,8 @@ venv/
 __pycache__/
 *.pyc
 clicker.db
+clicker.db-journal
+clicker.db-wal
+clicker.db-shm
 .env
 .venv/

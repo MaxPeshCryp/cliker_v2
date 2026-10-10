@@ -4,6 +4,8 @@ import time
 
 from flask import jsonify, request, session
 from amounts import db_amount
+from player_style import read_avatar
+from progression import progression
 
 
 MODES = {
@@ -212,13 +214,16 @@ def build_state(db, user_id):
         active = settle_run(db, active, timestamp)
     modes = []
     for duration, mode in MODES.items():
-        rows = db.execute("""SELECT b.*, u.nickname,
+        rows = db.execute("""SELECT b.*, u.nickname, u.avatar, u.is_verified, u.total_earned,
                              ROW_NUMBER() OVER (ORDER BY b.score DESC, b.achieved_at, b.run_id) AS rank
                              FROM timed_bests b JOIN users u ON u.id = b.user_id
                              WHERE b.duration = ? ORDER BY rank""", (duration,)).fetchall()
         current = next((row for row in rows if row["user_id"] == user_id), None)
         def player(row):
             return {"rank": row["rank"], "nickname": row["nickname"], "score": row["score"],
+                    "avatar": read_avatar(row["avatar"]),
+                    "isVerified": bool(row["is_verified"]),
+                    "progression": progression(row["total_earned"]),
                     "isCurrentUser": row["user_id"] == user_id}
         modes.append({"duration": duration, "name": mode["name"],
                       "rewards": [str(place_reward(balance, rank)) for rank in (1, 2, 3)],

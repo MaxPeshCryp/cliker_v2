@@ -1,3 +1,4 @@
+import json
 import os
 import random
 import secrets
@@ -7,12 +8,14 @@ from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, has_request_context, jsonify, request, send_from_directory, session
+from flask import Flask, Response, has_request_context, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import timed_games
 import rewarded_ads
 from amounts import add_db_amount, db_amount, parse_amount
+from player_style import AVATAR_OPTIONS, MAX_AVATAR_BYTES, prepare_avatar_image, read_avatar
+from progression import progression, REWARDS
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -82,6 +85,11 @@ BOOSTS = {
     "click_x10": {"name": "Золотой палец", "cost": 1_000_000, "duration": 60, "description": "x10 сила клика на 60 секунд", "clickMultiplier": 10},
 }
 COSMETICS = {
+    "ocean_theme": {"name": "Океан", "cost": 100_000, "description": "Глубокий синий и бирюзовое свечение"},
+    "sakura_theme": {"name": "Сакура", "cost": 250_000, "description": "Нежный розовый на сливовом фоне"},
+    "forest_theme": {"name": "Лес", "cost": 500_000, "description": "Хвойные оттенки и мягкий мятный свет"},
+    "sunset_theme": {"name": "Закат", "cost": 1_000_000, "description": "Тёплый терракотовый и персиковое сияние"},
+    "cosmos_theme": {"name": "Космос", "cost": 2_500_000, "description": "Ночное небо и лавандовые акценты"},
     "gold_theme": {"name": "Золотая тема", "cost": 5_000_000, "description": "Золотая рамка интерфейса"},
     "neon_theme": {"name": "Неоновая тема", "cost": 50_000_000, "description": "Неоновый блеск табло"},
     "royal_theme": {"name": "Королевская тема", "cost": 500_000_000, "description": "Премиальный стиль счета"},
@@ -119,6 +127,7 @@ app = Flask(__name__, static_folder=None)
 # is deliberately not persisted, so it cannot be guessed or reused after restart.
 app.secret_key = os.environ.get("CLICKER_SECRET_KEY") or secrets.token_urlsafe(48)
 app.config.update(
+    MAX_CONTENT_LENGTH=6 * 1024 * 1024,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("CLICKER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
@@ -178,6 +187,12 @@ def init_db():
                 PRIMARY KEY (user_id, robot_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS user_avatar_images (
+                user_id INTEGER PRIMARY KEY,
+                token TEXT NOT NULL UNIQUE,
+                content BLOB NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS user_research (
                 user_id INTEGER NOT NULL,
                 research_id TEXT NOT NULL,
@@ -232,6 +247,13 @@ def init_db():
         add_column_if_missing(db, "users", "total_earned", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "total_spent", "INTEGER NOT NULL DEFAULT 0")
         add_column_if_missing(db, "users", "active_theme", "TEXT NOT NULL DEFAULT 'classic'")
+        add_column_if_missing(db, "users", "avatar", "TEXT NOT NULL DEFAULT '{}'")
+        add_column_if_missing(db, "users", "is_verified", "INTEGER NOT NULL DEFAULT 0")
+        # A previously free selection is not a purchased unlock.
+        db.execute("""UPDATE users SET active_theme = 'classic'
+                      WHERE active_theme != 'classic' AND NOT EXISTS (
+                          SELECT 1 FROM user_cosmetics c WHERE c.user_id = users.id
+                          AND c.cosmetic_id = users.active_theme AND c.unlocked = 1)""")
         add_column_if_missing(db, "investments", "plan_id", "TEXT")
         add_column_if_missing(db, "investments", "success_chance", "INTEGER")
         add_column_if_missing(db, "investments", "profit_percent", "INTEGER")
@@ -284,7 +306,7 @@ def get_leaderboard(db, user_id, sort_by=None):
     """Return the podium and the signed-in player's immediate ranking context."""
     sort_by = sort_by or get_requested_leaderboard_sort()
     sort = LEADERBOARD_SORTS[sort_by]
-    rows = db.execute(f"SELECT id, nickname, {sort['column']} AS score FROM users").fetchall()
+    rows = db.execute(f"SELECT id, nickname, avatar, is_verified, total_earned, {sort['column']} AS score FROM users").fetchall()
     players = sorted(({**dict(row), "score": int(row["score"])} for row in rows),
                      key=lambda player: (-player["score"], player["id"]))
     current_index = next(index for index, player in enumerate(players) if player["id"] == user_id)
@@ -293,6 +315,9 @@ def get_leaderboard(db, user_id, sort_by=None):
         return {
             "rank": rank,
             "nickname": player["nickname"],
+            "isVerified": bool(player["is_verified"]),
+            "progression": progression(player["total_earned"]),
+            "avatar": read_avatar(player["avatar"]),
             "score": player["score"],
             "isCurrentUser": player["id"] == user_id,
         }
@@ -500,6 +525,10 @@ def build_state(db, user_id, auto_income=0):
     }
     return {
         "userNik": user["nickname"],
+        "progression": {**progression(user["total_earned"], details=True), "rewards": REWARDS},
+        "isVerified": bool(user["is_verified"]),
+        "avatar": read_avatar(user["avatar"]),
+        "avatarOptions": AVATAR_OPTIONS,
         "userEmail": user["email"],
         "userCount": user["balance"],
         "userCountExact": str(user["balance"]),
@@ -617,6 +646,74 @@ def click():
         auto_income = collect_active_income(db, session["user_id"])
         add_balance(db, session["user_id"], get_click_power(db, session["user_id"]))
         return jsonify(build_state(db, session["user_id"], auto_income))
+
+
+@app.post("/api/profile/avatar")
+@require_user
+def save_avatar():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict) or set(payload) != set(AVATAR_OPTIONS) or any(
+        payload.get(key) not in options for key, options in AVATAR_OPTIONS.items()
+    ):
+        return jsonify({"error": "Выберите допустимые детали аватарки"}), 400
+    with db_connection() as db:
+        db.execute("UPDATE users SET avatar = ? WHERE id = ?", (json.dumps(payload), session["user_id"]))
+        db.execute("DELETE FROM user_avatar_images WHERE user_id = ?", (session["user_id"],))
+        return jsonify(build_state(db, session["user_id"]))
+
+
+@app.errorhandler(413)
+def upload_too_large(error):
+    return jsonify({"error": "Выберите картинку размером до 5 МБ"}), 413
+
+
+@app.post("/api/profile/avatar-image")
+@require_user
+def save_avatar_image():
+    upload = request.files.get("image")
+    if upload is None:
+        return jsonify({"error": "Выберите картинку"}), 400
+    try:
+        content = prepare_avatar_image(upload.read(MAX_AVATAR_BYTES + 1))
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    token = secrets.token_hex(16)
+    with db_connection() as db:
+        user_id = session["user_id"]
+        db.execute("INSERT OR REPLACE INTO user_avatar_images (user_id, token, content) VALUES (?, ?, ?)", (user_id, token, content))
+        db.execute("UPDATE users SET avatar = ? WHERE id = ?", (json.dumps({"image": token}), user_id))
+        return jsonify(build_state(db, user_id))
+
+
+@app.get("/api/avatar-images/<token>")
+def avatar_image(token):
+    with db_connection() as db:
+        row = db.execute("SELECT content FROM user_avatar_images WHERE token = ?", (token,)).fetchone()
+    if row is None:
+        return jsonify({"error": "Аватарка не найдена"}), 404
+    response = Response(row["content"], mimetype="image/png")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.cache_control.public = True
+    response.cache_control.max_age = 86400
+    response.set_etag(token)
+    return response.make_conditional(request)
+
+
+@app.post("/api/profile/theme")
+@require_user
+def select_theme():
+    payload = request.get_json(silent=True)
+    theme = payload.get("theme") if isinstance(payload, dict) else None
+    if not isinstance(theme, str) or theme not in {"classic", *COSMETICS}:
+        return jsonify({"error": "Тема не найдена"}), 400
+    with db_connection() as db:
+        user_id = session["user_id"]
+        if theme != "classic" and COSMETICS[theme]["cost"] and not get_unlocked_ids(
+            db, "user_cosmetics", "cosmetic_id", user_id
+        ).get(theme):
+            return jsonify({"error": "Сначала купите эту тему в разделе «Косметика»"}), 403
+        db.execute("UPDATE users SET active_theme = ? WHERE id = ?", (theme, user_id))
+        return jsonify(build_state(db, user_id))
 
 
 @app.post("/api/click-upgrade")
