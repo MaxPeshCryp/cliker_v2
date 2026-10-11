@@ -35,4 +35,5 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl daemon-reload
 systemctl enable --now clicker
+systemctl restart clicker
 systemctl reload nginx

@@ -16,6 +16,7 @@ import rewarded_ads
 from amounts import add_db_amount, db_amount, parse_amount
 from player_style import AVATAR_OPTIONS, MAX_AVATAR_BYTES, prepare_avatar_image, read_avatar
 from progression import progression, REWARDS
+from verified_users import load_verified_emails, grant_verification
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -249,6 +250,7 @@ def init_db():
         add_column_if_missing(db, "users", "active_theme", "TEXT NOT NULL DEFAULT 'classic'")
         add_column_if_missing(db, "users", "avatar", "TEXT NOT NULL DEFAULT '{}'")
         add_column_if_missing(db, "users", "is_verified", "INTEGER NOT NULL DEFAULT 0")
+        grant_verification(db, load_verified_emails())
         # A previously free selection is not a purchased unlock.
         db.execute("""UPDATE users SET active_theme = 'classic'
                       WHERE active_theme != 'classic' AND NOT EXISTS (
@@ -592,12 +594,13 @@ def register():
     password = str(payload.get("password", ""))
     if not nickname or not email or not password:
         return jsonify({"error": "Заполните все поля"}), 400
+    verified = int(email in load_verified_emails())
     with db_connection() as db:
         if db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone():
             return jsonify({"error": "Почта занята"}), 409
         cursor = db.execute(
-            "INSERT INTO users (nickname, email, password_hash, last_income_at) VALUES (?, ?, ?, ?)",
-            (nickname, email, generate_password_hash(password), int(time.time())),
+            "INSERT INTO users (nickname, email, password_hash, last_income_at, is_verified) VALUES (?, ?, ?, ?, ?)",
+            (nickname, email, generate_password_hash(password), int(time.time()), verified),
         )
         ensure_user_rows(db, cursor.lastrowid)
     return jsonify({"message": "Вы зарегистрированы"})

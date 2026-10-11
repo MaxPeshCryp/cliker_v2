@@ -153,6 +153,19 @@ class ClickerApiTests(unittest.TestCase):
         self.assertFalse(state["isVerified"])
         self.assertTrue(state["leaderboard"]["top"][0]["isVerified"])
 
+    def test_verified_list_applies_at_registration_and_server_startup(self):
+        from unittest.mock import patch
+        self.register_and_login()
+        with patch.object(clicker, "load_verified_emails", return_value={"kk@kk", "tester@example.com"}):
+            clicker.init_db()
+            self.assertTrue(self.client.get("/api/state").get_json()["isVerified"])
+            self.client.post("/api/register", json={"nickname": "kk", "email": "KK@KK", "password": "password"})
+            result = self.client.post("/api/login", json={"email": "kk@kk", "password": "password"}).get_json()
+            self.assertTrue(result["isVerified"])
+            self.assertTrue(all(player["isVerified"] for player in result["leaderboard"]["top"]))
+        for path in ("/verified_users.txt", "/verified_users.py"):
+            self.assertEqual(self.client.get(path).status_code, 404)
+
     def test_levels_follow_lifetime_earnings_survive_spending_and_prestige(self):
         from amounts import db_amount
         from progression import REWARDS
