@@ -1195,6 +1195,10 @@ input::placeholder { color:var(--muted); opacity:.7; }
 .leaderboard-name-line { display:flex; align-items:center; gap:4px; min-width:0; }
 .verified-badge { display:inline-flex; width:18px; height:18px; flex:0 0 18px; color:#69b9ff; vertical-align:-2px; margin-left:6px; }
 .verified-badge svg { display:block; width:100%; height:100%; }
+.player-badges { display:inline-flex; flex-wrap:wrap; gap:4px; vertical-align:middle; margin-left:6px; }
+.player-badge { display:inline-flex; align-items:center; justify-content:center; width:23px; height:23px; border:1px solid var(--badge-color); color:var(--badge-color); background:#1b2336; border-radius:7px; font-size:14px; }
+.leaderboard-player .player-badges { margin-left:0; max-width:100%; }
+.leaderboard-player .player-badge { width:20px; height:20px; font-size:12px; }
 .leaderboard-identity .verified-badge { margin-left:-4px; }
 #welcomeName .verified-badge { width:23px; height:23px; vertical-align:0; }
 .leaderboard-avatar { width:34px; height:34px; flex-shrink:0; }

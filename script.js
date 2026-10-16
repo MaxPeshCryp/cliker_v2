@@ -214,7 +214,18 @@ async function apiRequest(url, options = {}) {
         headers: { ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }), "X-Leaderboard-Sort": activeLeaderboardSort, ...(options.headers || {}) }
     })
     const data = await response.json().catch(() => ({error: response.status === 413 ? "Выберите картинку размером до 5 МБ" : "Сервер временно недоступен"}))
-    if (!response.ok) throw new Error(data.error || "Ошибка сервера")
+    if (!response.ok) {
+        if (gameState && (response.status === 401 || data.error === "Аккаунт заблокирован администратором")) {
+            clearInterval(incomeTimer)
+            incomeTimer = null
+            gameState = null
+            gameLayout.style.display = "none"
+            formLogin.style.display = "block"
+            document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close())
+            alert(data.error || "Требуется вход")
+        }
+        throw new Error(data.error || "Ошибка сервера")
+    }
     return data
 }
 
@@ -245,8 +256,8 @@ function applyGameState(state) {
         Array.from(document.body.classList).filter(name => name.startsWith("theme-")).forEach(name => document.body.classList.remove(name))
         if (state.activeTheme && state.activeTheme !== "classic") document.body.classList.add(`theme-${state.activeTheme}`)
     }
-    renderPlayerName(gameBlock.querySelector("#name"), state.userNik, state.isVerified)
-    renderPlayerName(document.querySelector("#welcomeName"), state.userNik, state.isVerified)
+    renderPlayerName(gameBlock.querySelector("#name"), state.userNik, state.isVerified, state.badges)
+    renderPlayerName(document.querySelector("#welcomeName"), state.userNik, state.isVerified, state.badges)
     renderProgression(state.progression, previousLevel)
     updateHtml(document.querySelector("#editAvatar"), avatarSvg(state.avatar))
     if (document.querySelector("#appearanceDialog").open) renderThemeChoices()
@@ -307,6 +318,7 @@ function createLeaderboardRow(player) {
     nameLine.append(name)
     if (player.isVerified) nameLine.append(createVerifiedBadge())
     playerInfo.append(nameLine)
+    if (player.badges?.some(badge => badge.id !== "verified")) playerInfo.append(createPlayerBadges(player.badges))
     if (player.progression) playerInfo.append(createLevelBadge(player.progression, true))
     identity.append(avatar, playerInfo)
     row.append(rank, identity, score)
@@ -323,9 +335,26 @@ function createVerifiedBadge() {
     return badge
 }
 
-function renderPlayerName(element, nickname, isVerified) {
+function createPlayerBadges(badges = []) {
+    const group = document.createElement("span")
+    group.className = "player-badges"
+    badges.filter(badge => badge.id !== "verified").forEach(badge => {
+        const icon = document.createElement("span")
+        icon.className = "player-badge"
+        icon.style.setProperty("--badge-color", badge.color)
+        icon.setAttribute("role", "img")
+        icon.setAttribute("aria-label", badge.name)
+        icon.title = badge.name
+        icon.textContent = badge.symbol
+        group.append(icon)
+    })
+    return group
+}
+
+function renderPlayerName(element, nickname, isVerified, badges = []) {
     const children = [document.createTextNode(nickname)]
     if (isVerified) children.push(createVerifiedBadge())
+    if (badges.some(badge => badge.id !== "verified")) children.push(createPlayerBadges(badges))
     updateChildren(element, children)
 }
 
@@ -407,6 +436,7 @@ function updateUpgradeButton() {
 
 function renderRobots() {
     robotsIncome.textContent = `Автодоход: ${formatNumber(gameState.robotsIncome).text}/сек | за места: +${formatNumber(gameState.timedRewardIncome || 0).text}/сек | обслуживание: ${formatNumber(gameState.maintenanceCost).text}/сек | максимум уровня: ${gameState.robotMaxLevel}`
+    if (gameState.adminIncomeBoost?.remaining > 0) robotsIncome.textContent += ` | Бонус администратора: ×${gameState.adminIncomeBoost.multiplier}, ещё ${gameState.adminIncomeBoost.remaining} сек.`
     const cards = []
     Object.entries(gameState.catalog.robots).forEach(([robotId, robot]) => {
         const level = gameState.robots[robotId]?.level || 0

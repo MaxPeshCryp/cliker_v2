@@ -25,6 +25,8 @@ def load_verified_emails(path=DEFAULT_LIST):
 def grant_verification(db, emails):
     """Only grant badges; preserve existing manual verifications and game data."""
     result = {"granted": [], "already_verified": [], "missing": []}
+    has_override = "verification_override" in {row[1] for row in db.execute("PRAGMA table_info(users)")}
+    eligible = " AND verification_override IS NULL" if has_override else ""
     for email in sorted(emails):
         rows = db.execute("SELECT is_verified FROM users WHERE lower(trim(email)) = ?", (email,)).fetchall()
         if not rows:
@@ -32,8 +34,9 @@ def grant_verification(db, emails):
         elif all(row[0] == 1 for row in rows):
             result["already_verified"].append(email)
         else:
-            db.execute("UPDATE users SET is_verified = 1 WHERE lower(trim(email)) = ? AND is_verified IS NOT 1", (email,))
-            result["granted"].append(email)
+            changed = db.execute("UPDATE users SET is_verified = 1 WHERE lower(trim(email)) = ? AND is_verified IS NOT 1" + eligible, (email,)).rowcount
+            if changed:
+                result["granted"].append(email)
     return result
 
 

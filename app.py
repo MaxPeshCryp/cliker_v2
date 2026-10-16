@@ -8,18 +8,23 @@ from contextlib import contextmanager
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, has_request_context, jsonify, request, send_from_directory, session
+from flask import Flask, Response, abort, has_request_context, jsonify, request, send_from_directory, session
 from werkzeug.security import check_password_hash, generate_password_hash
+from dotenv import load_dotenv
 
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(os.environ.get("CLICKER_ENV_FILE", BASE_DIR / ".env"), override=False)
+
+import admin_panel
 import timed_games
 import rewarded_ads
+from badges import player_badges
 from amounts import add_db_amount, db_amount, parse_amount
 from player_style import AVATAR_OPTIONS, MAX_AVATAR_BYTES, prepare_avatar_image, read_avatar
 from progression import progression, REWARDS
 from verified_users import load_verified_emails, grant_verification
 
 
-BASE_DIR = Path(__file__).resolve().parent
 # Keep persistent data outside the Git working tree in production.  Locally the
 # application remains backwards-compatible and uses clicker.db beside app.py.
 DATABASE_PATH = Path(os.environ.get("CLICKER_DATABASE_PATH", BASE_DIR / "clicker.db"))
@@ -132,6 +137,8 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("CLICKER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+    CLICKER_ADMIN_LOGIN_HASH=os.environ.get("CLICKER_ADMIN_LOGIN_HASH", ""),
+    CLICKER_ADMIN_PASSWORD_HASH=os.environ.get("CLICKER_ADMIN_PASSWORD_HASH", ""),
 )
 
 
@@ -139,6 +146,7 @@ def get_db():
     connection = sqlite3.connect(DATABASE_PATH)
     connection.row_factory = sqlite3.Row
     connection.create_function("amount_add", 2, add_db_amount, deterministic=True)
+    connection.create_function("casefold", 1, lambda value: (value or "").casefold(), deterministic=True)
     connection.execute("PRAGMA foreign_keys = ON")
     return connection
 
@@ -151,7 +159,18 @@ def db_connection():
         with connection:
             if has_request_context() and request.path.startswith("/api/"):
                 connection.execute("BEGIN IMMEDIATE")
-                timed_games.synchronize(connection, timed_games.now_ms(), session.get("user_id"))
+                admin_request = request.path.startswith("/api/admin/")
+                user_id = None if admin_request else session.get("user_id")
+                if user_id is not None and request.path not in {"/api/login", "/api/register"}:
+                    user = connection.execute("SELECT is_banned, session_version FROM users WHERE id = ?", (user_id,)).fetchone()
+                    banned = user is not None and user["is_banned"]
+                    if user is None or banned or user["session_version"] != session.get("user_session_version", 0):
+                        session.pop("user_id", None)
+                        session.pop("user_session_version", None)
+                        response = jsonify(error="Аккаунт заблокирован администратором" if banned else "Требуется вход")
+                        response.status_code = 403 if banned else 401
+                        abort(response)
+                timed_games.synchronize(connection, timed_games.now_ms(), user_id)
             yield connection
     finally:
         connection.close()
@@ -250,6 +269,12 @@ def init_db():
         add_column_if_missing(db, "users", "active_theme", "TEXT NOT NULL DEFAULT 'classic'")
         add_column_if_missing(db, "users", "avatar", "TEXT NOT NULL DEFAULT '{}'")
         add_column_if_missing(db, "users", "is_verified", "INTEGER NOT NULL DEFAULT 0")
+        add_column_if_missing(db, "users", "verification_override", "INTEGER")
+        add_column_if_missing(db, "users", "is_banned", "INTEGER NOT NULL DEFAULT 0")
+        add_column_if_missing(db, "users", "session_version", "INTEGER NOT NULL DEFAULT 0")
+        add_column_if_missing(db, "users", "admin_income_multiplier", "INTEGER NOT NULL DEFAULT 1")
+        add_column_if_missing(db, "users", "admin_income_until", "INTEGER NOT NULL DEFAULT 0")
+        admin_panel.init_db(db)
         grant_verification(db, load_verified_emails())
         # A previously free selection is not a purchased unlock.
         db.execute("""UPDATE users SET active_theme = 'classic'
@@ -308,7 +333,7 @@ def get_leaderboard(db, user_id, sort_by=None):
     """Return the podium and the signed-in player's immediate ranking context."""
     sort_by = sort_by or get_requested_leaderboard_sort()
     sort = LEADERBOARD_SORTS[sort_by]
-    rows = db.execute(f"SELECT id, nickname, avatar, is_verified, total_earned, {sort['column']} AS score FROM users").fetchall()
+    rows = db.execute(f"SELECT id, nickname, avatar, is_verified, total_earned, {sort['column']} AS score FROM users WHERE is_banned = 0").fetchall()
     players = sorted(({**dict(row), "score": int(row["score"])} for row in rows),
                      key=lambda player: (-player["score"], player["id"]))
     current_index = next(index for index, player in enumerate(players) if player["id"] == user_id)
@@ -318,6 +343,7 @@ def get_leaderboard(db, user_id, sort_by=None):
             "rank": rank,
             "nickname": player["nickname"],
             "isVerified": bool(player["is_verified"]),
+            "badges": player_badges(db, player["id"], player["is_verified"]),
             "progression": progression(player["total_earned"]),
             "avatar": read_avatar(player["avatar"]),
             "score": player["score"],
@@ -428,7 +454,10 @@ def get_base_income_per_second(db, user_id):
     active_boosts = get_boosts(db, user_id)
     if active_boosts.get("income_x2", 0) > 0:
         income *= BOOSTS["income_x2"]["incomeMultiplier"]
-    return int(income)
+    income = int(income)
+    if user["admin_income_until"] > int(time.time()):
+        income *= user["admin_income_multiplier"]
+    return income
 
 
 def get_maintenance_cost(db, user_id, gross_income):
@@ -529,6 +558,9 @@ def build_state(db, user_id, auto_income=0):
         "userNik": user["nickname"],
         "progression": {**progression(user["total_earned"], details=True), "rewards": REWARDS},
         "isVerified": bool(user["is_verified"]),
+        "badges": player_badges(db, user_id, user["is_verified"]),
+        "adminIncomeBoost": {"multiplier": user["admin_income_multiplier"] if user["admin_income_until"] > int(time.time()) else 1,
+                             "remaining": max(0, user["admin_income_until"] - int(time.time()))},
         "avatar": read_avatar(user["avatar"]),
         "avatarOptions": AVATAR_OPTIONS,
         "userEmail": user["email"],
@@ -612,10 +644,13 @@ def login():
     email = str(payload.get("email", "")).strip().lower()
     password = str(payload.get("password", ""))
     with db_connection() as db:
-        user = db.execute("SELECT id, password_hash FROM users WHERE email = ?", (email,)).fetchone()
+        user = db.execute("SELECT id, password_hash, is_banned, session_version FROM users WHERE email = ?", (email,)).fetchone()
         if user is None or not check_password_hash(user["password_hash"], password):
             return jsonify({"error": "Логин или пароль неверны"}), 401
+        if user["is_banned"]:
+            return jsonify(error="Аккаунт заблокирован администратором"), 403
         session["user_id"] = user["id"]
+        session["user_session_version"] = user["session_version"]
         ensure_user_rows(db, user["id"])
         reset_income_timer(db, user["id"])
         return jsonify(build_state(db, user["id"], 0))
@@ -623,7 +658,8 @@ def login():
 
 @app.post("/api/logout")
 def logout():
-    session.clear()
+    session.pop("user_id", None)
+    session.pop("user_session_version", None)
     return jsonify({"message": "Вы вышли из аккаунта"})
 
 
@@ -928,6 +964,7 @@ def fusion():
 
 
 timed_games.register_routes(app, db_connection, require_user, build_state)
+admin_panel.register_routes(app, BASE_DIR, db_connection, ensure_user_rows)
 rewarded_ads.register_routes(app, db_connection, require_user, build_state,
                             add_balance, collect_active_income, ad_balance_reward)
 init_db()

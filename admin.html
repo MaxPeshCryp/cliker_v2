@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#111622">
+    <title>Админ-панель · Кликер</title>
+    <link rel="stylesheet" href="/admin.css?v=1">
+    <script src="/admin.js?v=1" defer></script>
+</head>
+<body>
+    <header class="admin-header">
+        <a class="brand" href="/">✦ <span>Кликер<small>УПРАВЛЕНИЕ ИГРОЙ</small></span></a>
+        <div class="header-actions"><a href="/">Открыть игру ↗</a><button id="adminLogout" class="secondary" hidden>Выйти</button></div>
+    </header>
+    <main>
+        <p id="adminStatus" role="status" aria-live="polite">Подключаемся к серверу…</p>
+        <section id="loginPanel" class="login-panel" hidden>
+            <span class="eyebrow">ДОСТУП АДМИНИСТРАТОРА</span>
+            <h1>Вход в панель</h1>
+            <p class="muted">Управление игроками, балансами и наградами.</p>
+            <form id="adminLoginForm">
+                <label for="adminLogin">Логин</label><input id="adminLogin" name="login" autocomplete="username" maxlength="128" required>
+                <label for="adminPassword">Пароль</label><input id="adminPassword" name="password" type="password" autocomplete="current-password" maxlength="256" required>
+                <button type="submit">Войти в админ-панель →</button>
+            </form>
+        </section>
+        <section id="adminPanel" hidden>
+            <div class="page-heading"><div><span class="eyebrow">АДМИН-ПАНЕЛЬ</span><h1>Игроки под контролем</h1><p class="muted">Выберите аккаунт, чтобы изменить его состояние.</p></div><span id="totalPlayers" class="counter"></span></div>
+            <div class="workspace">
+                <section class="players-panel panel" aria-labelledby="playersTitle">
+                    <div class="section-heading"><h2 id="playersTitle">Игроки</h2><button id="refreshPlayers" class="secondary" type="button">Обновить</button></div>
+                    <form id="searchForm" class="search-form"><label class="sr-only" for="playerSearch">Ник, email или ID</label><input id="playerSearch" placeholder="Ник, email или ID" maxlength="200" type="search"><button type="submit">Найти</button></form>
+                    <div id="playersList" class="players-list"></div>
+                    <div class="pagination"><button id="previousPage" class="secondary" type="button">← Назад</button><span id="pageLabel"></span><button id="nextPage" class="secondary" type="button">Далее →</button></div>
+                </section>
+                <section id="emptySelection" class="panel empty-selection"><span aria-hidden="true">◎</span><h2>Выберите игрока</h2><p class="muted">Его баланс, статус и награды появятся здесь.</p></section>
+                <section id="playerPanel" class="player-panel" hidden aria-labelledby="selectedName">
+                    <div class="panel player-summary"><div class="section-heading"><div><span id="selectedId" class="eyebrow"></span><h2 id="selectedName"></h2><p id="selectedEmail" class="muted"></p></div><span id="selectedStatus" class="status-pill"></span></div><div class="balance-line"><span class="muted">Текущий баланс</span><strong id="selectedBalance"></strong></div><div id="selectedBadges" class="selected-badges"></div></div>
+                    <div class="action-grid">
+                        <section class="panel"><h3>Количество кликов</h3><p class="muted">Введите точное целое число. Опыт и общий заработок не меняются.</p><form id="balanceForm"><label for="clickAmount">Количество</label><input id="clickAmount" name="amount" inputmode="numeric" pattern="[0-9]+" maxlength="101" placeholder="Например, 100000" required><div class="button-row"><button type="submit" name="action" value="add_clicks">+ Добавить</button><button type="submit" name="action" value="remove_clicks" class="secondary">− Убавить</button></div></form></section>
+                        <section class="panel"><h3>Повышенный автодоход</h3><p class="muted">Множитель дохода роботов. Нужен хотя бы один купленный робот.</p><p id="incomeBoostStatus" class="boost-status"></p><form id="incomeForm"><div class="field-row"><div><label for="incomeMultiplier">Множитель ×</label><input id="incomeMultiplier" type="number" min="2" max="1000" step="1" value="2" required></div><div><label for="incomeDuration">Срок</label><input id="incomeDuration" type="number" min="1" max="31536000" step="1" value="60" required></div></div><label class="sr-only" for="incomeUnit">Единица времени</label><select id="incomeUnit"><option value="1">Секунды</option><option value="60" selected>Минуты</option><option value="3600">Часы</option><option value="86400">Дни</option></select><div class="button-row"><button type="submit">Включить</button><button id="stopIncomeBoost" class="secondary" type="button">Отключить</button></div></form></section>
+                    </div>
+                    <section class="panel"><div class="section-heading"><div><h3>Бейджи и галочка</h3><p class="muted">12 наград на выбор. Можно выбрать и выдать несколько сразу.</p></div></div><div class="button-row verification-actions"><button id="grantVerification" type="button">✓ Выдать галочку</button><button id="revokeVerification" type="button" class="secondary">Забрать галочку</button></div><fieldset id="badgeChoices"><legend class="sr-only">Выбор бейджей для выдачи или отзыва</legend></fieldset><div class="button-row"><button id="grantBadges" type="button">Выдать выбранные</button><button id="revokeBadges" type="button" class="secondary">Забрать выбранные</button></div></section>
+                    <section class="panel moderation"><div><h3>Блокировка аккаунта</h3><p class="muted">Закрывает вход и доступ к игре. Игрок исключается из рейтингов.</p></div><button id="toggleBan" type="button" class="danger"></button></section>
+                    <section class="panel danger-zone"><div><h3>Обнулить аккаунт</h3><p class="muted">Сбросит весь игровой прогресс, оформление, бейджи и результаты мини-игр. Логин и пароль игрока сохранятся.</p></div><button id="resetAccount" class="danger" type="button">Обнулить аккаунт</button></section>
+                </section>
+            </div>
+        </section>
+    </main>
+    <dialog id="resetDialog" aria-labelledby="resetTitle"><h2 id="resetTitle">Обнуление аккаунта</h2><p id="resetDescription"></p><form id="resetForm"><label for="resetConfirmation">Введите ID игрока для подтверждения</label><input id="resetConfirmation" inputmode="numeric" pattern="[0-9]+" required autocomplete="off"><div class="button-row"><button type="submit" class="danger">Обнулить навсегда</button><button id="cancelReset" type="button" class="secondary">Отмена</button></div></form></dialog>
+</body>
+</html>

@@ -7,3 +7,4 @@ clicker.db-wal
 clicker.db-shm
 .env
 .venv/
+.test-deps/

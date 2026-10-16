@@ -6,6 +6,7 @@ from flask import jsonify, request, session
 from amounts import db_amount
 from player_style import read_avatar
 from progression import progression
+from badges import player_badges
 
 
 MODES = {
@@ -146,8 +147,9 @@ def settle_reward(db, reward, timestamp):
 
 
 def podium(db, duration):
-    return db.execute("""SELECT user_id FROM timed_bests WHERE duration = ?
-                         ORDER BY score DESC, achieved_at, run_id LIMIT 3""", (duration,)).fetchall()
+    return db.execute("""SELECT b.user_id FROM timed_bests b JOIN users u ON u.id = b.user_id
+                         WHERE b.duration = ? AND u.is_banned = 0
+                         ORDER BY b.score DESC, b.achieved_at, b.run_id LIMIT 3""", (duration,)).fetchall()
 
 
 def update_rewards(db, duration, timestamp):
@@ -217,12 +219,13 @@ def build_state(db, user_id):
         rows = db.execute("""SELECT b.*, u.nickname, u.avatar, u.is_verified, u.total_earned,
                              ROW_NUMBER() OVER (ORDER BY b.score DESC, b.achieved_at, b.run_id) AS rank
                              FROM timed_bests b JOIN users u ON u.id = b.user_id
-                             WHERE b.duration = ? ORDER BY rank""", (duration,)).fetchall()
+                             WHERE b.duration = ? AND u.is_banned = 0 ORDER BY rank""", (duration,)).fetchall()
         current = next((row for row in rows if row["user_id"] == user_id), None)
         def player(row):
             return {"rank": row["rank"], "nickname": row["nickname"], "score": row["score"],
                     "avatar": read_avatar(row["avatar"]),
                     "isVerified": bool(row["is_verified"]),
+                    "badges": player_badges(db, row["user_id"], row["is_verified"]),
                     "progression": progression(row["total_earned"]),
                     "isCurrentUser": row["user_id"] == user_id}
         modes.append({"duration": duration, "name": mode["name"],
