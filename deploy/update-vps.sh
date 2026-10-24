@@ -32,6 +32,12 @@ fi
 install -m 0644 "$APP_ROOT/app/deploy/nginx-clicker.conf" /etc/nginx/sites-available/clicker
 ln -sfn /etc/nginx/sites-available/clicker /etc/nginx/sites-enabled/clicker
 rm -f /etc/nginx/sites-enabled/default
+# Once enabled, keep the additional domain's configuration in sync on updates.
+# Initial issuance is explicit: bash deploy/enable-ai-domain.sh.
+if [ -f /etc/letsencrypt/live/max-click.iteacher-ai.org/fullchain.pem ] && [ -f /etc/letsencrypt/live/max-click.iteacher-ai.org/privkey.pem ]; then
+    install -m 0644 "$APP_ROOT/app/deploy/nginx-clicker-ai.conf" /etc/nginx/sites-available/clicker-ai
+    ln -sfn /etc/nginx/sites-available/clicker-ai /etc/nginx/sites-enabled/clicker-ai
+fi
 nginx -t
 systemctl daemon-reload
 systemctl enable --now clicker

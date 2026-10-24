@@ -313,3 +313,42 @@ sudo bash /var/www/clicker/app/deploy/update-vps.sh
 ```bash
 sudo bash /var/www/clicker/app/deploy/update-vps.sh
 ```
+
+### Дополнительный домен max-click.iteacher-ai.org
+
+Оба адреса открывают то же приложение с той же базой. Для нового домена
+используется отдельный сертификат и Nginx-конфиг `clicker-ai`; прежний адрес
+`max-click-pesh.iteacher-alex.org` продолжает работать. На новом домене потребуется
+войти в аккаунт заново, поскольку браузер хранит cookies отдельно для каждого домена.
+
+В Cloudflare в зоне `iteacher-ai.org` создайте запись `A`: имя `max-click`,
+адрес `65.20.72.135`. На время выпуска выберите **DNS only**. Если есть запись
+`AAAA`, она также должна вести на этот VPS с доступными портами 80 и 443;
+уберите её, если IPv6 для сайта не настроен. TCP-порты 80 и 443 должны быть
+разрешены в UFW и firewall провайдера.
+
+После отправки файлов `deploy` в GitHub выполните на VPS от root:
+
+```bash
+sudo -u clicker git -C /var/www/clicker/app pull --ff-only
+bash /var/www/clicker/app/deploy/enable-ai-domain.sh
+curl -I https://max-click.iteacher-ai.org/
+```
+
+Скрипт читает email из существующего `/var/www/clicker/.env`, включает HTTP-проверку,
+выпускает сертификат Let's Encrypt и затем включает HTTPS с перенаправлением
+с HTTP. Если проверка домена не прошла, повторите команду после исправления DNS
+или firewall. Приложение и база при этом не перезапускаются и не копируются.
+
+После успешной проверки HTTPS можно вернуть **Proxied** и выбрать в Cloudflare
+SSL/TLS **Full (strict)**. Не используйте Flexible. Существующий certbot timer
+продлевает сертификат; deploy hook перезагружает Nginx после продления.
+Проверьте расписание и тестовое продление:
+
+```bash
+systemctl list-timers --all | grep certbot
+certbot renew --cert-name max-click.iteacher-ai.org --dry-run
+```
+
+Обычный `deploy/update-vps.sh` сохраняет дополнительный домен и обновляет его
+конфигурацию, когда сертификат уже выпущен. Настройки остальных проектов не меняются.
