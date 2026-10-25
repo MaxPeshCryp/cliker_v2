@@ -18,6 +18,7 @@ load_dotenv(os.environ.get("CLICKER_ENV_FILE", BASE_DIR / ".env"), override=Fals
 import admin_panel
 import timed_games
 import rewarded_ads
+import quick_auth
 from badges import player_badges
 from amounts import add_db_amount, db_amount, parse_amount
 from player_style import AVATAR_OPTIONS, MAX_AVATAR_BYTES, prepare_avatar_image, read_avatar
@@ -137,6 +138,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("CLICKER_COOKIE_SECURE", "").lower() in {"1", "true", "yes"},
+    CLICKER_AUTH_ORIGINS=os.environ.get("CLICKER_AUTH_ORIGINS", quick_auth.DEFAULT_ORIGINS),
     CLICKER_ADMIN_LOGIN_HASH=os.environ.get("CLICKER_ADMIN_LOGIN_HASH", ""),
     CLICKER_ADMIN_PASSWORD_HASH=os.environ.get("CLICKER_ADMIN_PASSWORD_HASH", ""),
 )
@@ -275,6 +277,7 @@ def init_db():
         add_column_if_missing(db, "users", "admin_income_multiplier", "INTEGER NOT NULL DEFAULT 1")
         add_column_if_missing(db, "users", "admin_income_until", "INTEGER NOT NULL DEFAULT 0")
         admin_panel.init_db(db)
+        quick_auth.init_db(db)
         grant_verification(db, load_verified_emails())
         # A previously free selection is not a purchased unlock.
         db.execute("""UPDATE users SET active_theme = 'classic'
@@ -608,9 +611,40 @@ def script():
     return send_from_directory(BASE_DIR, "script.js")
 
 
+@app.get("/quick-auth.js")
+def quick_auth_script():
+    return send_from_directory(BASE_DIR, "quick-auth.js")
+
+
 @app.get("/timed-games.js")
 def timed_script():
     return send_from_directory(BASE_DIR, "timed-games.js")
+
+
+@app.get("/manifest.webmanifest")
+def pwa_manifest():
+    response = send_from_directory(BASE_DIR, "manifest.webmanifest", mimetype="application/manifest+json")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.get("/pwa.js")
+@app.get("/service-worker.js")
+@app.get("/offline.html")
+def pwa_asset():
+    # These explicit routes keep source files, credentials and databases private.
+    response = send_from_directory(BASE_DIR, request.path.lstrip("/"))
+    response.headers["Cache-Control"] = "no-cache"
+    if request.path == "/service-worker.js":
+        response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+
+@app.get("/assets/icons/<filename>")
+def pwa_icon(filename):
+    if filename not in {"icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"}:
+        abort(404)
+    return send_from_directory(BASE_DIR / "assets" / "icons", filename)
 
 
 @app.get("/assets/iteacher-young-creators.png")
@@ -660,6 +694,7 @@ def login():
 def logout():
     session.pop("user_id", None)
     session.pop("user_session_version", None)
+    session.pop("quick_challenge", None)
     return jsonify({"message": "Вы вышли из аккаунта"})
 
 
@@ -964,6 +999,7 @@ def fusion():
 
 
 timed_games.register_routes(app, db_connection, require_user, build_state)
+quick_auth.register_routes(app, db_connection, require_user, build_state, ensure_user_rows, reset_income_timer)
 admin_panel.register_routes(app, BASE_DIR, db_connection, ensure_user_rows)
 rewarded_ads.register_routes(app, db_connection, require_user, build_state,
                             add_balance, collect_active_income, ad_balance_reward)

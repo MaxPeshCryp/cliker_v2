@@ -222,6 +222,7 @@ async function apiRequest(url, options = {}) {
             gameLayout.style.display = "none"
             formLogin.style.display = "block"
             document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close())
+            window.dispatchEvent(new Event("clicker:logout"))
             alert(data.error || "Требуется вход")
         }
         throw new Error(data.error || "Ошибка сервера")
@@ -245,6 +246,7 @@ function openGame(state) {
     applyGameState(state)
     showCollectedIncome(state.autoIncome)
     startIncomeCollection()
+    window.dispatchEvent(new Event("clicker:login"))
 }
 
 function applyGameState(state) {

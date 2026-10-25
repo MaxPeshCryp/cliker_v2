@@ -3,19 +3,42 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Кликер</title>
     <meta name="theme-color" content="#101522">
-    <link rel="stylesheet" href="./style.css?v=25">
-    <script src="./script.js?v=25" defer> </script>
+    <meta name="application-name" content="Кликер">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Кликер">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/png" sizes="192x192" href="/assets/icons/icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+    <link rel="stylesheet" href="./style.css?v=27">
+    <script src="/pwa.js?v=1" defer></script>
+    <script src="./script.js?v=26" defer> </script>
     <script src="./timed-games.js?v=18" defer></script>
+    <script src="/quick-auth.js?v=1" defer></script>
 </head>
 
 <body>
     <header class="app-header">
         <a class="brand" href="/" aria-label="Кликер — главная"><span class="brand-icon" aria-hidden="true">✦</span><span>Кликер<small>МАЛЕНЬКИЙ КЛИК. БОЛЬШИЕ ВОЗМОЖНОСТИ.</small></span></a>
-        <span class="header-tag">Твоя империя начинается здесь</span>
+        <div class="app-actions" aria-label="Настройки приложения">
+            <button type="button" id="installApp" class="quiet-button" hidden>↓ Установить</button>
+            <button type="button" id="toggleFullscreen" class="quiet-button" aria-pressed="false" hidden>⛶ На весь экран</button>
+            <button type="button" id="toggleHaptics" class="quiet-button" aria-pressed="false" hidden>Вибрация</button>
+        </div>
     </header>
+    <div id="connectionNotice" class="app-notice" role="status" hidden>Нет связи. Для кликов и сохранения прогресса нужен интернет. Ждём подключения…</div>
+    <div id="appUpdate" class="app-notice" role="status" hidden><span>Доступна новая версия кликера.</span><button type="button" id="applyAppUpdate" class="quiet-button">Обновить</button></div>
+    <dialog id="installDialog" aria-labelledby="installTitle">
+        <div class="appearance-heading"><h2 id="installTitle">Кликер на домашнем экране</h2><button type="button" id="closeInstall" class="quiet-button" aria-label="Закрыть инструкцию установки">✕</button></div>
+        <p class="install-intro">Своя иконка и запуск без адресной строки браузера.</p>
+        <p id="installInstructions"></p>
+        <p class="appearance-help">Для игры и сохранения прогресса нужен интернет. На поддерживаемых устройствах можно включить вибрацию. На iPhone и iPad веб-приложения не поддерживают виброотклик; системная строка состояния может оставаться видимой.</p>
+        <button type="button" id="confirmInstall" hidden>Установить приложение</button>
+        <p id="installStatus" role="status"></p>
+    </dialog>
     <form id="form-register">
         <h2>Регистрация</h2>
         <label for="nik-register">Придумайте ник нейм </label>
@@ -38,6 +61,17 @@
     <form id="form-login">
 
         <h2>Войти</h2>
+        <section id="quickLoginPanel" class="quick-login-panel" aria-label="Быстрый вход" hidden>
+            <p id="quickLoginName"></p>
+            <button type="button" id="biometricLogin" hidden>Войти по биометрии</button>
+            <div id="pinLoginArea" hidden>
+                <label for="loginPin">Твой PIN-код</label>
+                <input type="password" id="loginPin" class="pin-input" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="6 цифр" aria-describedby="quickLoginStatus">
+                <button type="button" id="pinLogin">Войти по PIN</button>
+            </div>
+            <p class="quick-login-divider">или по почте и паролю</p>
+        </section>
+        <p id="quickLoginStatus" class="quick-auth-status" role="status" aria-live="polite"></p>
         <label for="email-login">Введите вашу почту</label>
         <input type="email" placeholder="user@mail.com" id="email-login" required>
 
@@ -56,6 +90,7 @@
             <button type="button" id="editAvatar" class="profile-avatar" aria-label="Создать свою аватарку"></button>
             <div class="player-welcome"><span class="eyebrow">РАДЫ ВИДЕТЬ ТЕБЯ</span><h1 id="welcomeName">Игрок</h1><p>Кликай. Создавай. Становись первым.</p></div>
             <button type="button" id="openAppearance" class="quiet-button">◈ <span>Оформление</span></button>
+            <button type="button" id="openQuickAuth" class="quiet-button">Быстрый вход</button>
             <button type="button" id="logoutButton" class="quiet-button">Выйти из аккаунта</button>
         </section>
         <section id="playerProgression" aria-labelledby="progressionTitle">
@@ -190,6 +225,27 @@
             <div id="leaderboardAround" class="leaderboard-list"></div>
         </aside>
     </div>
+
+    <dialog id="quickAuthDialog" aria-labelledby="quickAuthTitle">
+        <div class="appearance-heading"><h2 id="quickAuthTitle">Быстрый вход</h2><button type="button" id="closeQuickAuth" class="quiet-button" aria-label="Закрыть настройки быстрого входа">✕</button></div>
+        <p class="appearance-help quick-auth-intro">Настрой для этого браузера на своём устройстве. Для подключения нужен пароль аккаунта. Затем можно входить без почты и пароля.</p>
+        <p id="quickAuthDevice" class="quick-auth-device"></p>
+        <form id="quickAuthSetupForm">
+            <label for="quickAuthPassword">Пароль аккаунта для подтверждения</label>
+            <input type="password" id="quickAuthPassword" autocomplete="current-password" required>
+            <div class="quick-pin-fields">
+                <div><label for="setupPin">Новый PIN — 6 цифр</label><input type="password" id="setupPin" class="pin-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="••••••"></div>
+                <div><label for="confirmPin">Повтори PIN</label><input type="password" id="confirmPin" class="pin-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="off" placeholder="••••••"></div>
+            </div>
+            <button type="submit" id="saveQuickPin">Включить вход по PIN</button>
+            <div class="quick-login-divider">или</div>
+            <button type="button" id="setupBiometric">Подключить биометрию</button>
+            <p id="biometricHelp" class="appearance-help">Face ID, отпечаток или системный код устройства — способ проверки выбирает ОС. PIN из шести цифр выше задаётся отдельно.</p>
+        </form>
+        <p class="appearance-help">Настройка действует 90 дней. После пяти неверных PIN этот способ входа отключится до повторной настройки. Пароль аккаунта остаётся доступен.</p>
+        <p id="quickSetupStatus" class="quick-auth-status" role="status" aria-live="polite"></p>
+        <button type="button" id="forgetQuickAuth" class="quiet-button" hidden>Отключить быстрый вход на этом устройстве</button>
+    </dialog>
 
     <dialog id="appearanceDialog" aria-labelledby="appearanceTitle">
         <div class="appearance-heading"><div><span class="eyebrow">ТВОЯ ИГРА · ТВОЙ СТИЛЬ</span><h2 id="appearanceTitle">Оформление</h2></div><button type="button" id="closeAppearance" class="quiet-button" aria-label="Закрыть оформление">✕</button></div>

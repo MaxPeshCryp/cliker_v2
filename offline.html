@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#101522">
+    <title>Нет связи — Кликер</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); background: #101522; color: #f0f3fa; font: 16px/1.6 system-ui, sans-serif; color-scheme: dark; }
+        main { max-width: 420px; text-align: center; }
+        .icon { display: grid; place-items: center; width: 80px; height: 80px; margin: 0 auto 28px; border-radius: 24px; background: #ffce73; color: #101522; font-size: 52px; }
+        h1 { margin: 0 0 12px; font-size: 28px; line-height: 1.2; }
+        p { margin: 0 0 24px; color: #a5b0c6; }
+        a { display: inline-flex; align-items: center; min-height: 48px; padding: 12px 24px; border-radius: 12px; background: #ffce73; color: #101522; font-weight: 700; text-decoration: none; touch-action: manipulation; }
+        a:focus-visible { outline: 3px solid white; outline-offset: 4px; }
+        small { display: block; margin-top: 24px; color: #a5b0c6; }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="icon" aria-hidden="true">✦</div>
+        <h1>Вернёмся к кликам, когда появится связь</h1>
+        <p>Не удалось подключиться к игре. Проверь интернет и попробуй снова. Прогресс, который успел сохраниться на сервере, останется в аккаунте.</p>
+        <a href="/">Попробовать снова</a>
+        <small>Для кликов, покупок и рейтингов нужно подключение.</small>
+    </main>
+    <script>
+        let reconnecting = false
+        async function reconnect() {
+            if (!navigator.onLine || reconnecting) return
+            reconnecting = true
+            try {
+                // The online event can precede actual connectivity or this script.
+                // Probe the server before navigating so an outage cannot cause a reload loop.
+                const response = await fetch("/", { method: "HEAD", cache: "no-store" })
+                if (response.ok) window.location.replace("/")
+            } catch (_) { /* The retry link remains available while the server is unreachable. */ }
+            finally { reconnecting = false }
+        }
+        window.addEventListener("online", reconnect)
+        document.addEventListener("visibilitychange", () => { if (!document.hidden) reconnect() })
+        // navigator.onLine is only a hint; some devices miss the transition after a navigation.
+        setInterval(() => { if (!document.hidden) reconnect() }, 5000)
+        reconnect()
+    </script>
+</body>
+</html>
